@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,26 +6,25 @@
 
 @layer base {
   :root {
-    /* Warm cream/beige palette inspired by WordPress AEF */
-    --background: 38 40% 96%;
-    --foreground: 30 10% 20%;
+    --background: 220 14% 96%;
+    --foreground: 220 15% 15%;
 
-    --card: 38 35% 98%;
-    --card-foreground: 30 10% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
 
-    --popover: 38 35% 98%;
-    --popover-foreground: 30 10% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
 
-    --primary: 213 52% 22%;
-    --primary-foreground: 38 40% 96%;
+    --primary: 224 55% 28%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 38 25% 91%;
-    --secondary-foreground: 30 10% 25%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 15% 20%;
 
-    --muted: 38 20% 93%;
-    --muted-foreground: 30 8% 50%;
+    --muted: 220 12% 94%;
+    --muted-foreground: 220 8% 55%;
 
-    --accent: 42 72% 50%;
+    --accent: 224 76% 48%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -34,30 +33,33 @@
     --gold: 42 72% 50%;
     --gold-foreground: 0 0% 100%;
 
-    --success: 142 60% 38%;
+    --success: 152 60% 42%;
     --success-foreground: 0 0% 100%;
 
     --warning: 32 90% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 38 20% 88%;
-    --input: 38 20% 88%;
-    --ring: 42 72% 50%;
+    --info: 210 80% 55%;
+    --info-foreground: 0 0% 100%;
 
-    --radius: 0.625rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 76% 48%;
 
-    --sidebar-width: 260px;
-    --sidebar-background: 213 52% 22%;
-    --sidebar-foreground: 38 40% 96%;
-    --sidebar-primary: 42 72% 50%;
+    --radius: 0.5rem;
+
+    --sidebar-width: 240px;
+    --sidebar-background: 224 55% 28%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 224 76% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 45% 28%;
-    --sidebar-accent-foreground: 38 40% 96%;
-    --sidebar-border: 213 40% 30%;
-    --sidebar-ring: 42 72% 50%;
+    --sidebar-accent: 224 50% 34%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 224 45% 35%;
+    --sidebar-ring: 224 76% 48%;
+    --sidebar-muted: 224 30% 60%;
 
-    --font-display: 'Cormorant Garamond', serif;
-    --font-body: 'Inter', sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 }
 
@@ -65,34 +67,14 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body);
-  }
-
-  h1, h2, h3 {
-    font-family: var(--font-display);
   }
 }
 
 @layer utilities {
   .sidebar-gradient {
-    background: linear-gradient(180deg, hsl(213 52% 22%) 0%, hsl(213 48% 16%) 100%);
-  }
-
-  .gold-shimmer {
-    background: linear-gradient(135deg, hsl(42 72% 50%) 0%, hsl(42 80% 60%) 50%, hsl(42 72% 50%) 100%);
-    background-size: 200% 200%;
-    animation: shimmer 3s ease-in-out infinite;
-  }
-
-  .warm-card {
-    background: linear-gradient(145deg, hsl(38 35% 98%) 0%, hsl(38 30% 95%) 100%);
-  }
-
-  @keyframes shimmer {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
+    background: linear-gradient(180deg, hsl(224 55% 28%) 0%, hsl(224 55% 24%) 100%);
   }
 }

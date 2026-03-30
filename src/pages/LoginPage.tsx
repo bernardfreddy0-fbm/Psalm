@@ -24,81 +24,49 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.4 }}
         className="w-full max-w-sm"
       >
-        {/* Logo / Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full gold-shimmer mb-5">
-            <Music className="w-9 h-9 text-primary" />
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center mx-auto mb-4">
+            <Music className="w-7 h-7 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-display font-bold text-foreground">
-            Église AEF
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Communauté chrétienne vivante
-          </p>
+          <h1 className="text-xl font-bold text-foreground">Église AEF</h1>
+          <p className="text-xs text-muted-foreground">Espace Gestionnaire</p>
         </div>
 
-        {/* Login Card */}
-        <div className="bg-card rounded-lg p-8 border border-border shadow-sm">
-          <h2 className="text-lg font-display font-semibold text-foreground mb-5 text-center">Connexion</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-card rounded-lg border border-border p-6">
+          <h2 className="text-sm font-semibold text-foreground mb-4 text-center">Se connecter</h2>
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Identifiant ou adresse e-mail
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-gold text-sm"
-                required
-              />
+              <label className="block text-xs font-medium text-foreground mb-1">Identifiant ou adresse e-mail</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Mot de passe
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-gold text-sm"
-                required
-              />
+              <label className="block text-xs font-medium text-foreground mb-1">Mot de passe</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent" required />
             </div>
-
             <div className="flex items-center gap-2">
               <input type="checkbox" id="remember" className="rounded border-input" />
-              <label htmlFor="remember" className="text-sm text-muted-foreground">Se souvenir de moi</label>
+              <label htmlFor="remember" className="text-xs text-muted-foreground">Se souvenir de moi</label>
             </div>
-
-            {error && (
-              <p className="text-destructive text-sm">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 rounded-md bg-gold text-gold-foreground font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
+            {error && <p className="text-destructive text-xs">{error}</p>}
+            <button type="submit" disabled={loading}
+              className="w-full py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity">
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
         </div>
 
-        {/* Footer */}
-        <div className="text-center mt-6 space-y-1">
-          <p className="text-sm text-gold cursor-pointer hover:underline">← Aller sur Église AEF</p>
-          <p className="text-xs text-muted-foreground mt-4">
-            Fait avec ❤️ pour la gloire de Dieu
-          </p>
-        </div>
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Fait avec ❤️ pour la gloire de Dieu
+        </p>
       </motion.div>
     </div>
   );
