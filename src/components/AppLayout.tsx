@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Church, Users, Repeat,
-  Music, LogOut, Menu, X, Settings
+  Music, LogOut, Menu, X, Settings, Shield, Key, UserCog
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
