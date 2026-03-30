@@ -38,7 +38,9 @@ const navSections = [
   {
     label: 'ADMIN',
     items: [
-      { to: '/admin', icon: Settings, label: 'Administration WP' },
+      { to: '/comptes', icon: UserCog, label: 'Comptes' },
+      { to: '/permissions', icon: Key, label: 'Permissions' },
+      { to: '/configuration', icon: Settings, label: 'Configuration' },
     ],
   },
 ];
