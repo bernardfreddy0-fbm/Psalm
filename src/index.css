@@ -6,54 +6,55 @@
 
 @layer base {
   :root {
-    --background: 210 20% 97%;
-    --foreground: 213 32% 18%;
+    /* Warm cream/beige palette inspired by WordPress AEF */
+    --background: 38 40% 96%;
+    --foreground: 30 10% 20%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 213 32% 18%;
+    --card: 38 35% 98%;
+    --card-foreground: 30 10% 20%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 213 32% 18%;
+    --popover: 38 35% 98%;
+    --popover-foreground: 30 10% 20%;
 
     --primary: 213 52% 22%;
-    --primary-foreground: 210 40% 98%;
+    --primary-foreground: 38 40% 96%;
 
-    --secondary: 210 30% 94%;
-    --secondary-foreground: 213 52% 22%;
+    --secondary: 38 25% 91%;
+    --secondary-foreground: 30 10% 25%;
 
-    --muted: 210 20% 95%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 38 20% 93%;
+    --muted-foreground: 30 8% 50%;
 
-    --accent: 220 91% 54%;
+    --accent: 42 72% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --gold: 42 52% 54%;
+    --gold: 42 72% 50%;
     --gold-foreground: 0 0% 100%;
 
-    --success: 142 72% 38%;
+    --success: 142 60% 38%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 32 95% 44%;
+    --warning: 32 90% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 220 91% 54%;
+    --border: 38 20% 88%;
+    --input: 38 20% 88%;
+    --ring: 42 72% 50%;
 
     --radius: 0.625rem;
 
     --sidebar-width: 260px;
     --sidebar-background: 213 52% 22%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 42 52% 54%;
+    --sidebar-foreground: 38 40% 96%;
+    --sidebar-primary: 42 72% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 213 45% 28%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-accent-foreground: 38 40% 96%;
     --sidebar-border: 213 40% 30%;
-    --sidebar-ring: 220 91% 54%;
+    --sidebar-ring: 42 72% 50%;
 
     --font-display: 'Cormorant Garamond', serif;
     --font-body: 'Inter', sans-serif;
@@ -77,13 +78,17 @@
 
 @layer utilities {
   .sidebar-gradient {
-    background: linear-gradient(180deg, hsl(213 52% 22%) 0%, hsl(213 52% 16%) 100%);
+    background: linear-gradient(180deg, hsl(213 52% 22%) 0%, hsl(213 48% 16%) 100%);
   }
 
   .gold-shimmer {
-    background: linear-gradient(135deg, hsl(42 52% 54%) 0%, hsl(42 65% 62%) 50%, hsl(42 52% 54%) 100%);
+    background: linear-gradient(135deg, hsl(42 72% 50%) 0%, hsl(42 80% 60%) 50%, hsl(42 72% 50%) 100%);
     background-size: 200% 200%;
     animation: shimmer 3s ease-in-out infinite;
+  }
+
+  .warm-card {
+    background: linear-gradient(145deg, hsl(38 35% 98%) 0%, hsl(38 30% 95%) 100%);
   }
 
   @keyframes shimmer {
