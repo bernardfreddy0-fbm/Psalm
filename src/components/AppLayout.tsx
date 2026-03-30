@@ -53,7 +53,9 @@ const pageTitles: Record<string, string> = {
   '/cultes': 'Planning Louange',
   '/evenements': 'Événements',
   '/programme': 'Programme du culte',
-  '/rotations': 'Rotations',
+  '/comptes': 'Gestion des comptes',
+  '/permissions': 'Permissions',
+  '/configuration': 'Configuration',
   '/admin': 'Administration',
 };
 
