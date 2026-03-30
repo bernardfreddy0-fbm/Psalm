@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Church, Users, Repeat,
-  Music, LogOut, Menu, X, Settings
+  Music, LogOut, Menu, X, Settings, Shield, Key, UserCog
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -38,7 +38,9 @@ const navSections = [
   {
     label: 'ADMIN',
     items: [
-      { to: '/admin', icon: Settings, label: 'Administration WP' },
+      { to: '/comptes', icon: UserCog, label: 'Comptes' },
+      { to: '/permissions', icon: Key, label: 'Permissions' },
+      { to: '/configuration', icon: Settings, label: 'Configuration' },
     ],
   },
 ];
@@ -51,7 +53,9 @@ const pageTitles: Record<string, string> = {
   '/cultes': 'Planning Louange',
   '/evenements': 'Événements',
   '/programme': 'Programme du culte',
-  '/rotations': 'Rotations',
+  '/comptes': 'Gestion des comptes',
+  '/permissions': 'Permissions',
+  '/configuration': 'Configuration',
   '/admin': 'Administration',
 };
 
