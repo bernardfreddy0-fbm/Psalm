@@ -78,3 +78,9 @@
     background: linear-gradient(180deg, hsl(224 55% 28%) 0%, hsl(224 55% 24%) 100%);
   }
 }
+
+@layer components {
+  .input-field {
+    @apply w-full px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring;
+  }
+}
