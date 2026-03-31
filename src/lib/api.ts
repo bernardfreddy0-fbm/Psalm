@@ -100,7 +100,55 @@ export const getPermissions = () => api<{ permissions: Record<string, string[]> 
 export const savePermissions = (matrix: Record<string, string[]>) =>
   api(`permissions.php?action=update&matrix=${encodeURIComponent(JSON.stringify(matrix))}`);
 
-// Settings (different base URL)
+// Settings (new category-based API on api-psalm)
+export async function getSettingsByCategory(category: string): Promise<any[]> {
+  return api(`settings.php?action=get&category=${encodeURIComponent(category)}`);
+}
+
+export async function getAllSettings(): Promise<Record<string, any[]>> {
+  return api('settings.php?action=get');
+}
+
+export async function saveSetting(category: string, key: string, value: any) {
+  return api(`settings.php?action=set&category=${encodeURIComponent(category)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(typeof value === 'string' ? value : JSON.stringify(value))}`);
+}
+
+export async function saveSettingsBulk(settings: { category: string; key: string; value: any }[]) {
+  return api(`settings.php?action=bulk_set&settings=${encodeURIComponent(JSON.stringify(settings))}`);
+}
+
+export async function getSystemStats() {
+  return api<any>('settings.php?action=stats');
+}
+
+export async function clearCache() {
+  return api('settings.php?action=clear_cache');
+}
+
+export function getBackupUrl(): string {
+  return `${API_BASE}/settings.php?action=backup`;
+}
+
+// Activity logs
+export async function getActivityLogs(params?: { page?: number; limit?: number; action?: string; entity_type?: string; date_from?: string; date_to?: string }) {
+  let url = 'activity.php?action=list';
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined) url += `&${k}=${encodeURIComponent(String(v))}`;
+    });
+  }
+  return api<any>(url);
+}
+
+export async function getActivitySummary(days = 7) {
+  return api<any>(`activity.php?action=summary&days=${days}`);
+}
+
+export async function getActivityActions() {
+  return api<string[]>('activity.php?action=actions');
+}
+
+// Legacy settings compat
 export async function getSettings(): Promise<Record<string, string>> {
   const res = await fetch(`${SETTINGS_BASE}/settings.php?action=get`, {
     headers: { 'X-Session-Token': getToken() },
@@ -116,14 +164,5 @@ export async function saveSettings(settings: { key: string; value: string }[]) {
   });
   const json = await res.json();
   if (!json.success) throw new Error('Settings save error');
-  return json;
-}
-
-export async function saveSetting(key: string, value: string) {
-  const res = await fetch(`${SETTINGS_BASE}/settings.php?action=set&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`, {
-    headers: { 'X-Session-Token': getToken() },
-  });
-  const json = await res.json();
-  if (!json.success) throw new Error('Setting save error');
   return json;
 }
