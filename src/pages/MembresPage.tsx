@@ -224,7 +224,7 @@ export default function MembresPage() {
                 <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center text-[11px] font-bold text-card`}>{initials}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{m.first_name} {m.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{roleLabel(m.role)}{m.instrument ? ` · ${m.instrument}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">{(m.functions || []).map((f: string) => FUNCTION_LABELS[f] || f).join(' · ')}{m.instruments?.length > 0 ? ` · ${m.instruments.join(', ')}` : ''}</p>
                 </div>
                 <button onClick={() => setEditing({ id: m.id, first_name: m.first_name || '', last_name: m.last_name || '', email: m.email || '', role: m.role || 'choriste', instrument: m.instrument || '' })}
                   className="p-1.5 rounded text-accent hover:bg-accent/10"><Pen className="w-3.5 h-3.5" /></button>
