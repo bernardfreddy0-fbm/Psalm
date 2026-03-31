@@ -1,8 +1,48 @@
 const API_BASE = 'https://api-psalm.a-e-f.fr';
 const SETTINGS_BASE = 'https://admin-psalm.a-e-f.fr/api';
 
+const LEGACY_ROLE_ALIASES: Record<string, string> = {
+  responsable_louange: 'conducteur_louange',
+};
+
 function getToken(): string {
   return localStorage.getItem('aef_admin_token') || '';
+}
+
+function withRequestNonce(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`;
+}
+
+function normalizeRole(role: string): string {
+  return LEGACY_ROLE_ALIASES[role] || role;
+}
+
+function normalizeRoleCsv(roleValue?: string | null): string {
+  if (!roleValue) return '';
+
+  return Array.from(
+    new Set(
+      roleValue
+        .split(',')
+        .map(role => normalizeRole(role.trim()))
+        .filter(Boolean)
+    )
+  ).join(',');
+}
+
+function isActiveMember(member: any): boolean {
+  if (member?.is_active === undefined || member?.is_active === null) {
+    return member?.first_name !== '[Supprimé]';
+  }
+
+  return String(member.is_active) !== '0' && member?.first_name !== '[Supprimé]';
+}
+
+function normalizeMember(member: any) {
+  return {
+    ...member,
+    role: normalizeRoleCsv(member?.role),
+  };
 }
 
 export function setToken(token: string) {
@@ -14,8 +54,9 @@ export function clearToken() {
 }
 
 async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(withRequestNonce(url), {
     headers: { 'X-Session-Token': getToken() },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   const json = await res.json();
@@ -38,8 +79,9 @@ export async function login(email: string, password: string) {
 }
 
 export async function checkAuth() {
-  const res = await fetch(`${API_BASE}/auth.php?action=check`, {
+  const res = await fetch(withRequestNonce(`${API_BASE}/auth.php?action=check`), {
     headers: { 'X-Session-Token': getToken() },
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!json.success || !json.authenticated) return null;
@@ -48,8 +90,9 @@ export async function checkAuth() {
 
 export async function logout() {
   try {
-    await fetch(`${API_BASE}/auth.php?action=logout`, {
+    await fetch(withRequestNonce(`${API_BASE}/auth.php?action=logout`), {
       headers: { 'X-Session-Token': getToken() },
+      cache: 'no-store',
     });
   } finally {
     clearToken();
@@ -57,7 +100,8 @@ export async function logout() {
 }
 
 // Members
-export const getMembers = () => api<any[]>('members.php?action=list');
+export const getMembers = () =>
+  api<any[]>('members.php?action=list').then(members => members.filter(isActiveMember).map(normalizeMember));
 export const createMember = (data: { first_name: string; last_name: string; email: string; role: string; instrument?: string }) => {
   let url = `members.php?action=create&first_name=${encodeURIComponent(data.first_name)}&last_name=${encodeURIComponent(data.last_name)}&email=${encodeURIComponent(data.email)}&role=${encodeURIComponent(data.role)}`;
   if (data.instrument) url += `&instrument=${encodeURIComponent(data.instrument)}`;
@@ -150,8 +194,9 @@ export async function getActivityActions() {
 
 // Legacy settings compat
 export async function getSettings(): Promise<Record<string, string>> {
-  const res = await fetch(`${SETTINGS_BASE}/settings.php?action=get`, {
+  const res = await fetch(withRequestNonce(`${SETTINGS_BASE}/settings.php?action=get`), {
     headers: { 'X-Session-Token': getToken() },
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!json.success) throw new Error('Settings error');
@@ -159,8 +204,9 @@ export async function getSettings(): Promise<Record<string, string>> {
 }
 
 export async function saveSettings(settings: { key: string; value: string }[]) {
-  const res = await fetch(`${SETTINGS_BASE}/settings.php?action=bulk_set&settings=${encodeURIComponent(JSON.stringify(settings))}`, {
+  const res = await fetch(withRequestNonce(`${SETTINGS_BASE}/settings.php?action=bulk_set&settings=${encodeURIComponent(JSON.stringify(settings))}`), {
     headers: { 'X-Session-Token': getToken() },
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!json.success) throw new Error('Settings save error');
