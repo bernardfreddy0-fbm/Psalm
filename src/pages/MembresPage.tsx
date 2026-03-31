@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMembers, createMember, updateMember, deleteMember } from '@/lib/api';
+import { MEMBER_REGISTRY, type MemberRecord } from '@/lib/membersData';
 import { Users, Plus, Trash2, Grid3X3, List, Search, Pen, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -9,7 +10,7 @@ const ROLES = [
 ];
 
 const INSTRUMENTS = ['Piano', 'Guitare acoustique', 'Guitare électrique', 'Basse', 'Batterie', 'Clavier', 'Autre', ''];
-const POLES = ['Tous', 'Pole Choriste', 'Pole Conducteur', 'Pole Musique', 'Pole Projection', 'Pole Sonorisation', 'Pole Video'];
+const POLES = ['Tous', 'Choriste & Dirigeant', 'Musique', 'Sonorisation', 'Projection', 'Vidéo'];
 const AVATAR_COLORS = ['bg-accent', 'bg-success', 'bg-destructive', 'bg-warning', 'bg-gold', 'bg-info', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500'];
 
 function getAvatarColor(name: string) {
@@ -20,14 +21,21 @@ function getAvatarColor(name: string) {
 
 const roleLabel = (r: string) => r?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Membre';
 
-const roleToFilter = (role: string) => {
-  if (['choriste'].includes(role)) return 'Pole Choriste';
-  if (['conducteur_louange', 'responsable_louange'].includes(role)) return 'Pole Conducteur';
-  if (['musicien'].includes(role)) return 'Pole Musique';
-  if (['projectionniste'].includes(role)) return 'Pole Projection';
-  if (['sonorisateur'].includes(role)) return 'Pole Sonorisation';
-  if (['videaste'].includes(role)) return 'Pole Video';
-  return '';
+const POLE_MAP: Record<string, string> = {
+  'Choriste & Dirigeant': 'choriste',
+  'Musique': 'musique',
+  'Sonorisation': 'sonorisation',
+  'Projection': 'projection',
+  'Vidéo': 'video',
+};
+
+const FUNCTION_LABELS: Record<string, string> = {
+  dirigeant: 'Dirigeant',
+  choriste: 'Choriste',
+  musicien: 'Musicien',
+  sonorisateur: 'Sonorisateur',
+  projectionniste: 'Projectionniste',
+  videaste: 'Vidéaste',
 };
 
 type EditMember = { id: string; first_name: string; last_name: string; email: string; role: string; instrument: string } | null;
@@ -44,6 +52,47 @@ export default function MembresPage() {
 
   const load = () => { setLoading(true); getMembers().then(setMembers).catch(() => setMembers([])).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
+
+  // Merge API members with static registry for display
+  const mergedMembers = (() => {
+    // Use registry as primary source, enrich with API data if available
+    const registryMembers = MEMBER_REGISTRY.filter(m => m.active).map(reg => {
+      const apiMatch = members.find(m =>
+        m.first_name?.toLowerCase() === reg.first_name.toLowerCase() &&
+        m.last_name?.toLowerCase() === reg.last_name.toLowerCase()
+      );
+      return {
+        id: apiMatch?.id || `reg-${reg.first_name}-${reg.last_name}`,
+        first_name: reg.first_name,
+        last_name: reg.last_name,
+        email: apiMatch?.email || reg.email || '',
+        phone: reg.phone || '',
+        functions: reg.functions,
+        instruments: reg.instruments,
+        poles: reg.poles,
+        role: apiMatch?.role || reg.functions.join(','),
+        instrument: apiMatch?.instrument || reg.instruments.join(', '),
+        experienced: reg.experienced,
+        fromRegistry: true,
+      };
+    });
+
+    // Add API members not in registry
+    const apiOnly = members.filter(m =>
+      !MEMBER_REGISTRY.find(r =>
+        r.first_name.toLowerCase() === (m.first_name || '').toLowerCase() &&
+        r.last_name.toLowerCase() === (m.last_name || '').toLowerCase()
+      )
+    ).map(m => ({
+      ...m,
+      functions: (m.role || '').split(',').map((r: string) => r.trim()).filter(Boolean),
+      instruments: m.instrument ? [m.instrument.toLowerCase()] : [],
+      poles: [] as string[],
+      fromRegistry: false,
+    }));
+
+    return [...registryMembers, ...apiOnly];
+  })();
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,9 +111,9 @@ export default function MembresPage() {
 
   const handleDelete = async (id: string) => { if (!confirm('Supprimer ?')) return; await deleteMember(id); load(); };
 
-  const filtered = members.filter(m => {
-    const matchSearch = `${m.first_name} ${m.last_name} ${m.email}`.toLowerCase().includes(search.toLowerCase());
-    const matchPole = activePole === 'Tous' || roleToFilter(m.role) === activePole;
+  const filtered = mergedMembers.filter(m => {
+    const matchSearch = `${m.first_name} ${m.last_name} ${m.email} ${m.functions.join(' ')}`.toLowerCase().includes(search.toLowerCase());
+    const matchPole = activePole === 'Tous' || (m.poles && m.poles.includes(POLE_MAP[activePole] || ''));
     return matchSearch && matchPole;
   });
 
@@ -80,9 +129,9 @@ export default function MembresPage() {
 
       {/* Stats */}
       <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
-        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : members.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
+        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : mergedMembers.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
         <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{loading ? '—' : filtered.length}</span><p className="text-xs text-muted-foreground">Affichés</p></div>
-        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(members.map(m => m.role)).size}</span><p className="text-xs text-muted-foreground">Rôles</p></div>
+        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(mergedMembers.flatMap(m => m.functions || [])).size}</span><p className="text-xs text-muted-foreground">Fonctions</p></div>
       </div>
 
       {/* Search + Filters */}
@@ -175,7 +224,7 @@ export default function MembresPage() {
                 <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center text-[11px] font-bold text-card`}>{initials}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{m.first_name} {m.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{roleLabel(m.role)}{m.instrument ? ` · ${m.instrument}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">{(m.functions || []).map((f: string) => FUNCTION_LABELS[f] || f).join(' · ')}{m.instruments?.length > 0 ? ` · ${m.instruments.join(', ')}` : ''}</p>
                 </div>
                 <button onClick={() => setEditing({ id: m.id, first_name: m.first_name || '', last_name: m.last_name || '', email: m.email || '', role: m.role || 'choriste', instrument: m.instrument || '' })}
                   className="p-1.5 rounded text-accent hover:bg-accent/10"><Pen className="w-3.5 h-3.5" /></button>
@@ -193,8 +242,12 @@ export default function MembresPage() {
                 </div>
                 <div className={`w-14 h-14 rounded-full ${color} flex items-center justify-center text-sm font-bold text-card mx-auto mb-2 ring-4 ring-card shadow-sm`}>{initials}</div>
                 <p className="text-sm font-semibold text-foreground">{m.first_name} {m.last_name}</p>
-                <p className="text-[11px] text-muted-foreground mb-2">{roleLabel(m.role)}</p>
-                {m.instrument && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold font-medium">🎵 {m.instrument}</span>}
+                <div className="flex flex-wrap justify-center gap-0.5 mb-1">
+                  {(m.functions || []).map((f: string) => (
+                    <span key={f} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{FUNCTION_LABELS[f] || f}</span>
+                  ))}
+                </div>
+                {m.instruments?.length > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold font-medium">🎵 {m.instruments.join(', ')}</span>}
               </motion.div>
             );
           })}
