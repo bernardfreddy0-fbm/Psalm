@@ -75,7 +75,6 @@ export default function ComptesPage() {
       setUsers(prev => prev.map(user => String(user.id) === editing.id ? { ...user, role: nextRoleValue } : user));
       toast.success('Rôles mis à jour');
       setEditing(null);
-      load();
     } catch {
       toast.error('Erreur lors de la mise à jour');
     }
@@ -103,7 +102,6 @@ export default function ComptesPage() {
       console.log('[ComptesPage] Delete result:', result);
       setUsers(prev => prev.filter(user => String(user.id) !== String(id)));
       toast.success('Compte supprimé');
-      load();
     } catch (err: any) {
       console.error('[ComptesPage] Delete error:', err, err?.message);
       toast.error(`Erreur lors de la suppression: ${err?.message || 'inconnue'}`);
