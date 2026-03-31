@@ -71,12 +71,16 @@ export default function ComptesPage() {
     const nextRoleValue = nextRoles.join(',');
 
     try {
+      console.log('[ComptesPage] Saving roles for', editing.id, ':', nextRoleValue);
       await updateMember(editing.id, { role: nextRoleValue });
-      setUsers(prev => prev.map(user => String(user.id) === editing.id ? { ...user, role: nextRoleValue } : user));
+      // Reload from API to ensure we have the latest data
+      const freshMembers = await getMembers();
+      setUsers(freshMembers.filter(isVisibleUser));
       toast.success('Rôles mis à jour');
       setEditing(null);
-    } catch {
-      toast.error('Erreur lors de la mise à jour');
+    } catch (err: any) {
+      console.error('[ComptesPage] Role update error:', err);
+      toast.error(`Erreur lors de la mise à jour: ${err?.message || 'inconnue'}`);
     }
   };
 
