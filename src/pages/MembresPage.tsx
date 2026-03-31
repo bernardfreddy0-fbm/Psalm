@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { MEMBER_REGISTRY } from '@/lib/membersData';
+import { useEffect, useState } from 'react';
+import { getMembers } from '@/lib/api';
 import { Users, Grid3X3, List, Search, Eye, X, Phone, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -12,36 +12,51 @@ function getAvatarColor(name: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-const FUNCTION_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = {
   dirigeant: 'Dirigeant',
+  conducteur_louange: 'Dirigeant',
   choriste: 'Choriste',
   musicien: 'Musicien',
   sonorisateur: 'Sonorisateur',
   projectionniste: 'Projectionniste',
   videaste: 'Vidéaste',
+  responsable_louange: 'Resp. Louange',
+  responsable_technique: 'Resp. Technique',
+  pasteur: 'Pasteur',
+  dev: 'Dev',
 };
 
-const POLE_MAP: Record<string, string> = {
-  'Choriste & Dirigeant': 'choriste',
-  'Musique': 'musique',
-  'Sonorisation': 'sonorisation',
-  'Projection': 'projection',
-  'Vidéo': 'video',
+const POLE_ROLES: Record<string, string[]> = {
+  'Choriste & Dirigeant': ['choriste', 'dirigeant', 'conducteur_louange', 'responsable_louange'],
+  'Musique': ['musicien'],
+  'Sonorisation': ['sonorisateur', 'responsable_technique'],
+  'Projection': ['projectionniste'],
+  'Vidéo': ['videaste'],
 };
 
-type ViewMember = { first_name: string; last_name: string; email: string; phone: string; functions: string[]; instruments: string[] } | null;
+function parseRoles(role: string): string[] {
+  if (!role) return [];
+  return role.split(',').map(r => r.trim()).filter(Boolean);
+}
+
+type ViewMember = { first_name: string; last_name: string; email: string; phone: string; roles: string[] } | null;
 
 export default function MembresPage() {
+  const [members, setMembers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activePole, setActivePole] = useState('Tous');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [viewing, setViewing] = useState<ViewMember>(null);
 
-  const activeMembers = MEMBER_REGISTRY.filter(m => m.active);
+  useEffect(() => {
+    getMembers().then(setMembers).catch(() => setMembers([])).finally(() => setLoading(false));
+  }, []);
 
-  const filtered = activeMembers.filter(m => {
-    const matchSearch = `${m.first_name} ${m.last_name} ${m.functions.join(' ')}`.toLowerCase().includes(search.toLowerCase());
-    const matchPole = activePole === 'Tous' || m.poles.includes(POLE_MAP[activePole] || '');
+  const filtered = members.filter(m => {
+    const roles = parseRoles(m.role);
+    const matchSearch = `${m.first_name} ${m.last_name} ${roles.join(' ')}`.toLowerCase().includes(search.toLowerCase());
+    const matchPole = activePole === 'Tous' || roles.some(r => (POLE_ROLES[activePole] || []).includes(r));
     return matchSearch && matchPole;
   });
 
@@ -53,9 +68,9 @@ export default function MembresPage() {
 
       {/* Stats */}
       <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
-        <div><span className="text-2xl font-bold text-foreground">{activeMembers.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
+        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : members.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
         <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{filtered.length}</span><p className="text-xs text-muted-foreground">Affichés</p></div>
-        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(activeMembers.flatMap(m => m.functions)).size}</span><p className="text-xs text-muted-foreground">Fonctions</p></div>
+        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(members.flatMap(m => parseRoles(m.role))).size}</span><p className="text-xs text-muted-foreground">Rôles distincts</p></div>
       </div>
 
       {/* Search + Filters */}
@@ -112,21 +127,11 @@ export default function MembresPage() {
                 <div>
                   <p className="text-xs text-muted-foreground mb-1.5">Fonctions</p>
                   <div className="flex flex-wrap gap-1">
-                    {viewing.functions.map(f => (
-                      <span key={f} className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{FUNCTION_LABELS[f] || f}</span>
+                    {viewing.roles.map(r => (
+                      <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{ROLE_LABELS[r] || r}</span>
                     ))}
                   </div>
                 </div>
-                {viewing.instruments.length > 0 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1.5">Instruments</p>
-                    <div className="flex flex-wrap gap-1">
-                      {viewing.instruments.map(i => (
-                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-gold/10 text-gold font-medium">🎵 {i}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </motion.div>
           </motion.div>
@@ -134,35 +139,38 @@ export default function MembresPage() {
       </AnimatePresence>
 
       {/* Members */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Chargement...</p>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun membre</p></div>
       ) : (
         <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3' : 'space-y-2'}>
           {filtered.map((m, i) => {
-            const initials = `${m.first_name[0]}${m.last_name[0]}`;
+            const initials = `${m.first_name?.[0] || ''}${m.last_name?.[0] || ''}`;
             const color = getAvatarColor(`${m.first_name}${m.last_name}`);
-            const openView = () => setViewing({ first_name: m.first_name, last_name: m.last_name, email: m.email || '', phone: m.phone || '', functions: m.functions, instruments: m.instruments });
+            const roles = parseRoles(m.role);
+            const openView = () => setViewing({ first_name: m.first_name, last_name: m.last_name, email: m.email || '', phone: m.phone || '', roles });
 
             if (viewMode === 'list') return (
-              <motion.div key={`${m.first_name}-${m.last_name}-${i}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
+              <motion.div key={m.id || `${m.first_name}-${m.last_name}-${i}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                 className="bg-card rounded-lg border border-border p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/30" onClick={openView}>
                 <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center text-[11px] font-bold text-card`}>{initials}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{m.first_name} {m.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{m.functions.map(f => FUNCTION_LABELS[f] || f).join(' · ')}</p>
+                  <p className="text-xs text-muted-foreground">{roles.map(r => ROLE_LABELS[r] || r).join(' · ')}</p>
                 </div>
                 <Eye className="w-4 h-4 text-muted-foreground" />
               </motion.div>
             );
 
             return (
-              <motion.div key={`${m.first_name}-${m.last_name}-${i}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+              <motion.div key={m.id || `${m.first_name}-${m.last_name}-${i}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
                 className="bg-card rounded-lg border border-border p-4 text-center cursor-pointer hover:shadow-md transition-shadow" onClick={openView}>
                 <div className={`w-14 h-14 rounded-full ${color} flex items-center justify-center text-sm font-bold text-card mx-auto mb-2 ring-4 ring-card shadow-sm`}>{initials}</div>
                 <p className="text-sm font-semibold text-foreground">{m.first_name} {m.last_name}</p>
                 <div className="flex flex-wrap justify-center gap-0.5 mt-1">
-                  {m.functions.map(f => (
-                    <span key={f} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{FUNCTION_LABELS[f] || f}</span>
+                  {roles.map(r => (
+                    <span key={r} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{ROLE_LABELS[r] || r}</span>
                   ))}
                 </div>
               </motion.div>
