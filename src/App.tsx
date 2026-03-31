@@ -8,6 +8,9 @@ import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import PlanningPage from "@/pages/PlanningPage";
+import ProgrammePage from "@/pages/ProgrammePage";
+import EvenementsPage from "@/pages/EvenementsPage";
+import RotationsPage from "@/pages/RotationsPage";
 import MembresPage from "@/pages/MembresPage";
 import ChantsPage from "@/pages/ChantsPage";
 import ComptesPage from "@/pages/ComptesPage";
@@ -16,13 +19,6 @@ import ConfigurationPage from "@/pages/ConfigurationPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
-
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="text-center py-12">
-    <h1 className="text-lg font-bold text-foreground mb-2">{title}</h1>
-    <p className="text-sm text-muted-foreground">Page en cours de développement</p>
-  </div>
-);
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -33,11 +29,11 @@ function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/programme" element={<PlaceholderPage title="Programme du culte" />} />
-        <Route path="/evenements" element={<PlaceholderPage title="Événements" />} />
+        <Route path="/programme" element={<ProgrammePage />} />
+        <Route path="/evenements" element={<EvenementsPage />} />
         <Route path="/cultes" element={<PlanningPage />} />
         <Route path="/membres" element={<MembresPage />} />
-        <Route path="/rotations" element={<PlaceholderPage title="Rotations" />} />
+        <Route path="/rotations" element={<RotationsPage />} />
         <Route path="/chants" element={<ChantsPage />} />
         <Route path="/comptes" element={<ComptesPage />} />
         <Route path="/permissions" element={<PermissionsPage />} />
