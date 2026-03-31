@@ -73,10 +73,14 @@ export function computeEquityReport(sundays: any[], members: any[]): EquityRepor
   const today = new Date();
   const stats: Record<string, { count: number; roles: Record<string, number>; lastDate: string }> = {};
 
-  // Initialize all members
+  // Build member ID → name lookup
+  const memberById: Record<number | string, string> = {};
   members.forEach(m => {
     const name = `${m.first_name || ''} ${m.last_name || ''}`.trim();
-    if (name) stats[name] = { count: 0, roles: {}, lastDate: '' };
+    if (name) {
+      stats[name] = { count: 0, roles: {}, lastDate: '' };
+      if (m.id) memberById[m.id] = name;
+    }
   });
 
   // Role-level tracking
@@ -93,20 +97,30 @@ export function computeEquityReport(sundays: any[], members: any[]): EquityRepor
     roleMembers[role][name] = (roleMembers[role][name] || 0) + 1;
   };
 
+  // Resolve a field that could be a name string or a member ID
+  const resolveName = (val: any): string => {
+    if (!val) return '';
+    if (typeof val === 'string' && val.trim()) return val.trim();
+    if (typeof val === 'number' && memberById[val]) return memberById[val];
+    return '';
+  };
+
   // Parse all sundays
   sundays.forEach(s => {
     const date = s.date || '';
-    addParticipation(s.dirigeant, 'Dirigeant', date);
+    // Dirigeant: support both name string and ID reference
+    const dirigeantName = resolveName(s.dirigeant) || resolveName(s.dirigeant_id);
+    addParticipation(dirigeantName, 'Dirigeant', date);
     parseChoristes(s.choristes).forEach(c => addParticipation(c, 'Choriste', date));
-    addParticipation(s.piano, 'Piano', date);
-    addParticipation(s.batterie, 'Batterie', date);
-    addParticipation(s.guitare_elec, 'Guitare élec.', date);
-    addParticipation(s.guitare_acou, 'Guitare acou.', date);
-    addParticipation(s.basse, 'Basse', date);
+    addParticipation(resolveName(s.piano), 'Piano', date);
+    addParticipation(resolveName(s.batterie), 'Batterie', date);
+    addParticipation(resolveName(s.guitare_elec), 'Guitare élec.', date);
+    addParticipation(resolveName(s.guitare_acou), 'Guitare acou.', date);
+    addParticipation(resolveName(s.basse), 'Basse', date);
     if (s.son) {
       parseChoristes(s.son).forEach(n => addParticipation(n, 'Sonorisation', date));
     }
-    addParticipation(s.projection, 'Projection', date);
+    addParticipation(resolveName(s.projection), 'Projection', date);
     if (s.video) {
       parseChoristes(s.video).forEach(n => addParticipation(n, 'Vidéo', date));
     }
