@@ -72,16 +72,32 @@ export default function ComptesPage() {
   const handleUpdateRole = async () => {
     if (!editing) return;
 
-    const nextRoles = Array.from(new Set(editing.roles.map(normalizeRole).filter(Boolean)));
+    // Convert back to API format (conducteur_louange → responsable_louange)
+    const nextRoles = Array.from(new Set(editing.roles.map(r => toApiRole(normalizeRole(r))).filter(Boolean)));
     const nextRoleValue = nextRoles.join(',');
 
     try {
-      console.log('[ComptesPage] Saving roles for', editing.id, ':', nextRoleValue);
+      console.log('[ComptesPage] Saving roles for id', editing.id, '→ API value:', nextRoleValue);
       await updateMember(editing.id, { role: nextRoleValue });
-      // Reload from API to ensure we have the latest data
+      
+      // Reload and verify
       const freshMembers = await getMembers();
+      const updated = freshMembers.find((m: any) => String(m.id) === editing.id);
+      const savedRoles = updated?.role || '';
+      
+      // Verify the save actually persisted
+      const sentSet = new Set(nextRoles);
+      const savedSet = new Set(savedRoles.split(',').map((r: string) => r.trim()).filter(Boolean));
+      const match = sentSet.size === savedSet.size && [...sentSet].every(r => savedSet.has(r));
+      
       setUsers(freshMembers.filter(isVisibleUser));
-      toast.success('Rôles mis à jour');
+      
+      if (match) {
+        toast.success('Rôles mis à jour');
+      } else {
+        console.warn('[ComptesPage] Role mismatch — sent:', nextRoleValue, 'got:', savedRoles);
+        toast.warning('Les rôles ont été envoyés mais le serveur n\'a pas confirmé la mise à jour. Veuillez réessayer.');
+      }
       setEditing(null);
     } catch (err: any) {
       console.error('[ComptesPage] Role update error:', err);
