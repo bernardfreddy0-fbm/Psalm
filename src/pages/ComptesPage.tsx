@@ -65,10 +65,15 @@ export default function ComptesPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
     try {
-      await deleteMember(id);
+      console.log('[ComptesPage] Deleting member id:', id, 'name:', name);
+      const result = await deleteMember(String(id));
+      console.log('[ComptesPage] Delete result:', result);
       toast.success('Compte supprimé');
       load();
-    } catch { toast.error('Erreur lors de la suppression'); }
+    } catch (err: any) {
+      console.error('[ComptesPage] Delete error:', err, err?.message);
+      toast.error(`Erreur lors de la suppression: ${err?.message || 'inconnue'}`);
+    }
   };
 
   const toggleRole = (role: string) => {
