@@ -29,11 +29,11 @@ function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/programme" element={<PlaceholderPage title="Programme du culte" />} />
-        <Route path="/evenements" element={<PlaceholderPage title="Événements" />} />
+        <Route path="/programme" element={<ProgrammePage />} />
+        <Route path="/evenements" element={<EvenementsPage />} />
         <Route path="/cultes" element={<PlanningPage />} />
         <Route path="/membres" element={<MembresPage />} />
-        <Route path="/rotations" element={<PlaceholderPage title="Rotations" />} />
+        <Route path="/rotations" element={<RotationsPage />} />
         <Route path="/chants" element={<ChantsPage />} />
         <Route path="/comptes" element={<ComptesPage />} />
         <Route path="/permissions" element={<PermissionsPage />} />
