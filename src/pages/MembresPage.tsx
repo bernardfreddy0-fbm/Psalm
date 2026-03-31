@@ -129,9 +129,9 @@ export default function MembresPage() {
 
       {/* Stats */}
       <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
-        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : members.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
+        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : mergedMembers.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
         <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{loading ? '—' : filtered.length}</span><p className="text-xs text-muted-foreground">Affichés</p></div>
-        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(members.map(m => m.role)).size}</span><p className="text-xs text-muted-foreground">Rôles</p></div>
+        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(mergedMembers.flatMap(m => m.functions || [])).size}</span><p className="text-xs text-muted-foreground">Fonctions</p></div>
       </div>
 
       {/* Search + Filters */}
