@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ConfigGeneral from '@/components/config/ConfigGeneral';
 import ConfigNotifications from '@/components/config/ConfigNotifications';
 import ConfigIntegrations from '@/components/config/ConfigIntegrations';
-import ConfigTeams from '@/components/config/ConfigTeams';
 import ConfigSecurity from '@/components/config/ConfigSecurity';
 import ConfigMaintenance from '@/components/config/ConfigMaintenance';
 
@@ -12,7 +11,6 @@ const modules = [
   { id: 'general', label: 'Général', desc: 'Informations de l\'église, horaires, langue', icon: Church, color: 'bg-primary/10 text-primary' },
   { id: 'notifications', label: 'Notifications', desc: 'Email SMTP, Push, SMS', icon: Bell, color: 'bg-warning/10 text-warning' },
   { id: 'integrations', label: 'Intégrations', desc: 'Google Calendar, Spotify, Backups', icon: Link2, color: 'bg-accent/10 text-accent' },
-  { id: 'teams', label: 'Équipes & Rôles', desc: 'Permissions, matrice des accès', icon: Users, color: 'bg-success/10 text-success' },
   { id: 'security', label: 'Sécurité', desc: 'Sessions, mots de passe, IP', icon: Shield, color: 'bg-destructive/10 text-destructive' },
   { id: 'maintenance', label: 'Maintenance', desc: 'Stats, backups, cache', icon: Wrench, color: 'bg-gold/10 text-gold' },
 ];
@@ -21,7 +19,6 @@ const moduleComponents: Record<string, React.FC> = {
   general: ConfigGeneral,
   notifications: ConfigNotifications,
   integrations: ConfigIntegrations,
-  teams: ConfigTeams,
   security: ConfigSecurity,
   maintenance: ConfigMaintenance,
 };
