@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Church, Bell, Link2, Users, Shield, Wrench, ArrowLeft } from 'lucide-react';
+import { Church, Bell, Link2, Shield, Wrench, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfigGeneral from '@/components/config/ConfigGeneral';
 import ConfigNotifications from '@/components/config/ConfigNotifications';
