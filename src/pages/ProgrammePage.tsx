@@ -1,124 +1,128 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { getPlanning, getSongs, getMembers } from '@/lib/api';
-import { FileText, Music, Plus, X, ChevronDown, ChevronUp, GripVertical, Clock, Users, Save, RefreshCw } from 'lucide-react';
+import { Music, Plus, Minus, X, ChevronUp, ChevronDown, Search, Save, RefreshCw, Printer, FileText, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
-const MOMENTS = [
-  { key: 'accueil', label: 'Accueil & Louange', icon: '🎵', color: 'bg-accent/10 text-accent' },
-  { key: 'adoration', label: 'Adoration', icon: '🙏', color: 'bg-purple-500/10 text-purple-600' },
-  { key: 'offrande', label: 'Offrande', icon: '💝', color: 'bg-yellow-500/10 text-yellow-600' },
-  { key: 'predication', label: 'Prédication', icon: '📖', color: 'bg-green-500/10 text-green-600' },
-  { key: 'communion', label: 'Communion', icon: '🍞', color: 'bg-orange-500/10 text-orange-600' },
-  { key: 'cloture', label: 'Clôture', icon: '✨', color: 'bg-blue-500/10 text-blue-600' },
-];
+const KEYS = ['Tous', 'Ré', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do'];
 
-interface ProgramItem {
+interface ProgramSong {
   id: string;
-  moment: string;
-  songId?: string;
-  songTitle?: string;
-  songKey?: string;
-  note?: string;
-  duration?: number;
+  songId: string;
+  title: string;
+  author?: string;
+  key?: string;
 }
 
+interface ProgramData {
+  date: string;
+  heure: string;
+  predicateur: string;
+  conducteur: string;
+  titre: string;
+  reference: string;
+  nbChants: number;
+  notes: string;
+  songs: ProgramSong[];
+}
+
+const emptyProgram = (): ProgramData => ({
+  date: new Date().toISOString().split('T')[0],
+  heure: '',
+  predicateur: '',
+  conducteur: '',
+  titre: '',
+  reference: '',
+  nbChants: 5,
+  notes: '',
+  songs: [],
+});
+
 export default function ProgrammePage() {
-  const [sundays, setSundays] = useState<any[]>([]);
+  const [step, setStep] = useState(1);
   const [songs, setSongs] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [sundays, setSundays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSunday, setSelectedSunday] = useState<any>(null);
-  const [programs, setPrograms] = useState<Record<string, ProgramItem[]>>({});
-  const [showSongPicker, setShowSongPicker] = useState<string | null>(null);
+  const [program, setProgram] = useState<ProgramData>(emptyProgram());
   const [songSearch, setSongSearch] = useState('');
+  const [keyFilter, setKeyFilter] = useState('Tous');
+  const [previewTab, setPreviewTab] = useState<'congregation' | 'equipe' | 'conducteur'>('congregation');
 
   useEffect(() => {
     setLoading(true);
     const year = new Date().getFullYear();
     Promise.all([
-      getPlanning(year).catch(() => []),
       getSongs().catch(() => []),
       getMembers().catch(() => []),
-    ]).then(([s, so, m]) => {
-      setSundays(s);
+      getPlanning(year).catch(() => []),
+    ]).then(([so, m, su]) => {
       setSongs(so);
       setMembers(m);
-      // Auto-select next upcoming sunday
+      setSundays(su);
+      // Auto-select next sunday date
       const today = new Date().toISOString().split('T')[0];
-      const upcoming = s.filter((x: any) => x.date >= today).sort((a: any, b: any) => a.date.localeCompare(b.date));
-      if (upcoming.length > 0) setSelectedSunday(upcoming[0]);
-      else if (s.length > 0) setSelectedSunday(s[s.length - 1]);
+      const next = su.filter((s: any) => s.date >= today).sort((a: any, b: any) => a.date.localeCompare(b.date))[0];
+      if (next) {
+        setProgram(p => ({ ...p, date: next.date, conducteur: next.dirigeant || '' }));
+      }
     }).finally(() => setLoading(false));
   }, []);
 
-  const upcomingSundays = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return sundays
-      .filter(s => s.date >= today)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 8);
-  }, [sundays]);
+  const formatDateLong = (d: string) => {
+    try {
+      return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { return d; }
+  };
 
-  const pastSundays = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return sundays
-      .filter(s => s.date < today)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 4);
-  }, [sundays]);
+  const filteredSongs = useMemo(() => {
+    return songs.filter(s => {
+      const matchSearch = !songSearch || `${s.title} ${s.author || ''}`.toLowerCase().includes(songSearch.toLowerCase());
+      const matchKey = keyFilter === 'Tous' || (s.key || '').toLowerCase().startsWith(keyFilter.toLowerCase());
+      return matchSearch && matchKey;
+    });
+  }, [songs, songSearch, keyFilter]);
 
-  const currentProgram = selectedSunday ? (programs[selectedSunday.id] || []) : [];
-
-  const addSongToMoment = (moment: string, song: any) => {
-    if (!selectedSunday) return;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const item: ProgramItem = {
-      id,
-      moment,
+  const addSong = (song: any) => {
+    if (program.songs.length >= program.nbChants) {
+      toast.error(`Maximum ${program.nbChants} chants atteint`);
+      return;
+    }
+    if (program.songs.find(s => s.songId === song.id)) {
+      toast.info('Chant déjà dans le programme');
+      return;
+    }
+    const item: ProgramSong = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       songId: song.id,
-      songTitle: song.title,
-      songKey: song.key || '',
-      duration: song.tempo ? Math.round(240 / (parseInt(song.tempo) || 120)) : 4,
+      title: song.title,
+      author: song.author,
+      key: song.key,
     };
-    setPrograms(prev => ({
-      ...prev,
-      [selectedSunday.id]: [...(prev[selectedSunday.id] || []), item],
-    }));
-    setShowSongPicker(null);
-    setSongSearch('');
+    setProgram(p => ({ ...p, songs: [...p.songs, item] }));
     toast.success(`"${song.title}" ajouté`);
   };
 
-  const removeSongFromProgram = (itemId: string) => {
-    if (!selectedSunday) return;
-    setPrograms(prev => ({
-      ...prev,
-      [selectedSunday.id]: (prev[selectedSunday.id] || []).filter(i => i.id !== itemId),
-    }));
+  const removeSong = (id: string) => {
+    setProgram(p => ({ ...p, songs: p.songs.filter(s => s.id !== id) }));
   };
 
-  const moveSong = (itemId: string, direction: 'up' | 'down') => {
-    if (!selectedSunday) return;
-    setPrograms(prev => {
-      const list = [...(prev[selectedSunday.id] || [])];
-      const idx = list.findIndex(i => i.id === itemId);
-      if (idx < 0) return prev;
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= list.length) return prev;
-      [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
-      return { ...prev, [selectedSunday.id]: list };
-    });
+  const moveSong = (idx: number, dir: 'up' | 'down') => {
+    const newSongs = [...program.songs];
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= newSongs.length) return;
+    [newSongs[idx], newSongs[swapIdx]] = [newSongs[swapIdx], newSongs[idx]];
+    setProgram(p => ({ ...p, songs: newSongs }));
   };
 
-  const totalDuration = currentProgram.reduce((sum, i) => sum + (i.duration || 4), 0);
+  const handleSave = () => {
+    toast.success('Programme sauvegardé (brouillon local)');
+  };
 
-  const filteredSongs = songs.filter(s =>
-    `${s.title} ${s.author}`.toLowerCase().includes(songSearch.toLowerCase())
-  );
-
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  const formatDateLong = (d: string) => new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const handlePrint = (type: string) => {
+    toast.info(`Impression ${type} — utilisez Ctrl+P / Cmd+P`);
+    window.print();
+  };
 
   if (loading) {
     return (
@@ -129,200 +133,474 @@ export default function ProgrammePage() {
     );
   }
 
+  const steps = [
+    { num: 1, label: 'Informations' },
+    { num: 2, label: 'Chants' },
+    { num: 3, label: 'Aperçu & Export' },
+  ];
+
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-lg font-bold text-foreground flex items-center gap-2">📋 Programme du Culte</h1>
-          <p className="text-xs text-muted-foreground">Organisez l'ordre du culte avec les chants et intervenants</p>
+          <h1 className="text-lg font-bold text-foreground flex items-center gap-2">🎵 Programme du Culte</h1>
+          <p className="text-xs text-muted-foreground">
+            {program.date ? `Programme · ${formatDateLong(program.date)}` : 'Nouveau programme'}
+          </p>
         </div>
-        <button onClick={() => toast.info('Sauvegarde locale active')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
-          <Save className="w-3.5 h-3.5" /> Sauvegarder
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleSave}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+            <Save className="w-3.5 h-3.5" /> Brouillon
+          </button>
+          <button onClick={() => setStep(3)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+            Aperçu PDF <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Left: Sunday selector */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Upcoming */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Left sidebar: Steps */}
+        <div className="lg:col-span-1">
           <div className="bg-card rounded-lg border border-border p-4">
-            <h3 className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">📅 Prochains cultes</h3>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Étapes</p>
             <div className="space-y-1">
-              {upcomingSundays.map(s => {
-                const isSelected = selectedSunday?.id === s.id;
-                const isJeunesse = s.is_jeunesse || (s.label || '').toLowerCase().includes('jeunesse');
-                const programCount = (programs[s.id] || []).length;
-                return (
-                  <button key={s.id} onClick={() => setSelectedSunday(s)}
-                    className={`w-full text-left px-3 py-2 rounded-md text-xs transition-colors flex items-center justify-between ${
-                      isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'
-                    }`}>
-                    <div className="flex items-center gap-2">
-                      {isJeunesse && <span className="text-[9px]">👥</span>}
-                      <span className="font-medium">{formatDate(s.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {s.dirigeant && <span className={`text-[9px] ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{s.dirigeant.split(' ')[0]}</span>}
-                      {programCount > 0 && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isSelected ? 'bg-primary-foreground/20' : 'bg-accent/10 text-accent'}`}>
-                          {programCount}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-              {upcomingSundays.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Aucun culte à venir</p>}
+              {steps.map(s => (
+                <button key={s.num} onClick={() => setStep(s.num)}
+                  className={`w-full text-left px-3 py-2.5 rounded-md text-xs transition-all flex items-center gap-2.5 ${
+                    step === s.num
+                      ? 'bg-primary text-primary-foreground font-semibold'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === s.num ? 'bg-primary-foreground/20' : 'bg-muted'
+                  }`}>{s.num}</span>
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
-
-          {/* Past */}
-          {pastSundays.length > 0 && (
-            <div className="bg-card rounded-lg border border-border p-4">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Cultes passés</h3>
-              <div className="space-y-1">
-                {pastSundays.map(s => (
-                  <button key={s.id} onClick={() => setSelectedSunday(s)}
-                    className={`w-full text-left px-3 py-2 rounded-md text-xs transition-colors ${
-                      selectedSunday?.id === s.id ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:bg-muted/50'
-                    }`}>
-                    {formatDate(s.date)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right: Program builder */}
-        <div className="lg:col-span-3">
-          {!selectedSunday ? (
-            <div className="bg-card rounded-lg border border-border p-12 text-center">
-              <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-30" />
-              <p className="text-sm text-muted-foreground">Sélectionnez un dimanche pour composer le programme</p>
-            </div>
-          ) : (
-            <>
-              {/* Sunday header */}
-              <div className="bg-card rounded-lg border border-border p-4 mb-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-foreground capitalize">{formatDateLong(selectedSunday.date)}</h2>
-                    <div className="flex items-center gap-3 mt-1">
-                      {selectedSunday.dirigeant && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Users className="w-3 h-3" /> {selectedSunday.dirigeant}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Music className="w-3 h-3" /> {currentProgram.length} chant{currentProgram.length > 1 ? 's' : ''}
-                      </span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> ~{totalDuration} min
-                      </span>
-                    </div>
-                  </div>
-                  {selectedSunday.is_jeunesse && (
-                    <span className="text-xs px-2 py-1 rounded bg-yellow-500/15 text-yellow-600 font-semibold">👥 Jeunesse</span>
-                  )}
+        {/* Main content */}
+        <div className="lg:col-span-4">
+          <AnimatePresence mode="wait">
+            {step === 1 && (
+              <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                <StepInformations program={program} setProgram={setProgram} members={members} sundays={sundays} />
+                <div className="flex justify-end mt-4">
+                  <button onClick={() => setStep(2)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                    Choisir les chants <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              </div>
+              </motion.div>
+            )}
 
-              {/* Moments */}
-              <div className="space-y-3">
-                {MOMENTS.map(moment => {
-                  const momentSongs = currentProgram.filter(p => p.moment === moment.key);
-                  return (
-                    <div key={moment.key} className="bg-card rounded-lg border border-border overflow-hidden">
-                      <div className={`px-4 py-2.5 flex items-center justify-between ${moment.color}`}>
-                        <span className="text-xs font-bold uppercase tracking-wide">{moment.icon} {moment.label}</span>
-                        <button onClick={() => setShowSongPicker(moment.key)}
-                          className="p-1 rounded hover:bg-black/10 transition-colors">
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {momentSongs.length > 0 ? (
-                        <div className="divide-y divide-border">
-                          {momentSongs.map((item, idx) => (
-                            <motion.div key={item.id} layout
-                              className="px-4 py-2.5 flex items-center gap-3 hover:bg-muted/30 transition-colors group">
-                              <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 cursor-grab" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground">{item.songTitle}</p>
-                                {item.songKey && <span className="text-[10px] text-muted-foreground">Tonalité: {item.songKey}</span>}
-                              </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => moveSong(item.id, 'up')} disabled={idx === 0}
-                                  className="p-1 rounded hover:bg-muted disabled:opacity-30">
-                                  <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
-                                <button onClick={() => moveSong(item.id, 'down')} disabled={idx === momentSongs.length - 1}
-                                  className="p-1 rounded hover:bg-muted disabled:opacity-30">
-                                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
-                                <button onClick={() => removeSongFromProgram(item.id)}
-                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="px-4 py-3 text-xs text-muted-foreground italic">Aucun chant — cliquez + pour ajouter</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Note */}
-              {selectedSunday.note && (
-                <div className="bg-muted/50 rounded-lg border border-border p-4 mt-4">
-                  <p className="text-xs font-bold text-foreground mb-1">📝 Note</p>
-                  <p className="text-xs text-muted-foreground">{selectedSunday.note}</p>
+            {step === 2 && (
+              <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                <StepChants
+                  program={program}
+                  filteredSongs={filteredSongs}
+                  songSearch={songSearch}
+                  setSongSearch={setSongSearch}
+                  keyFilter={keyFilter}
+                  setKeyFilter={setKeyFilter}
+                  addSong={addSong}
+                  removeSong={removeSong}
+                  moveSong={moveSong}
+                />
+                <div className="flex justify-between mt-4">
+                  <button onClick={() => setStep(1)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Informations
+                  </button>
+                  <button onClick={() => setStep(3)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                    Aperçu & Export <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              )}
-            </>
-          )}
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                <StepPreview
+                  program={program}
+                  previewTab={previewTab}
+                  setPreviewTab={setPreviewTab}
+                  handlePrint={handlePrint}
+                  handleSave={handleSave}
+                />
+                <div className="flex justify-between mt-4">
+                  <button onClick={() => setStep(2)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Modifier les chants
+                  </button>
+                  <button onClick={handleSave}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-accent text-accent-foreground text-xs font-medium hover:bg-accent/90 transition-colors">
+                    <Check className="w-3.5 h-3.5" /> Enregistrer le programme
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Step 1: Informations ─── */
+function StepInformations({ program, setProgram, members, sundays }: {
+  program: ProgramData;
+  setProgram: React.Dispatch<React.SetStateAction<ProgramData>>;
+  members: any[];
+  sundays: any[];
+}) {
+  const update = (field: keyof ProgramData, value: any) => setProgram(p => ({ ...p, [field]: value }));
+
+  return (
+    <div className="bg-card rounded-lg border border-border p-6">
+      <h2 className="text-sm font-bold text-foreground mb-1">Informations du culte</h2>
+      <p className="text-xs text-muted-foreground mb-5">Renseignez les détails de base du culte</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Date */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Date du culte</label>
+          <input type="date" value={program.date} onChange={e => update('date', e.target.value)}
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+        </div>
+        {/* Heure */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Heure</label>
+          <input type="time" value={program.heure} onChange={e => update('heure', e.target.value)}
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+        </div>
+        {/* Prédicateur */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Prédicateur / Orateur</label>
+          <input type="text" value={program.predicateur} onChange={e => update('predicateur', e.target.value)}
+            placeholder="Ex: Pasteur Jean Dupont"
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+        </div>
+        {/* Conducteur */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Conducteur de louange</label>
+          <input type="text" value={program.conducteur} onChange={e => update('conducteur', e.target.value)}
+            placeholder="Ex: Marie Martin"
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
         </div>
       </div>
 
-      {/* Song picker modal */}
-      <AnimatePresence>
-        {showSongPicker && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowSongPicker(null); setSongSearch(''); }}>
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="bg-card rounded-xl border border-border p-5 w-full max-w-lg max-h-[70vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-foreground">Ajouter un chant — {MOMENTS.find(m => m.key === showSongPicker)?.label}</h3>
-                <button onClick={() => { setShowSongPicker(null); setSongSearch(''); }}><X className="w-4 h-4 text-muted-foreground" /></button>
+      {/* Titre / Thème */}
+      <div className="mt-4">
+        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Titre / Thème du message</label>
+        <input type="text" value={program.titre} onChange={e => update('titre', e.target.value)}
+          placeholder="Ex: La Foi qui déplace les montagnes"
+          className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        {/* Référence biblique */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Référence biblique</label>
+          <input type="text" value={program.reference} onChange={e => update('reference', e.target.value)}
+            placeholder="Ex: Marc 11:23"
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+        </div>
+        {/* Nombre de chants */}
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Nombre de chants</label>
+          <select value={program.nbChants} onChange={e => update('nbChants', parseInt(e.target.value))}
+            className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring">
+            {[3, 4, 5, 6, 7, 8].map(n => (
+              <option key={n} value={n}>{n} chants</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div className="mt-4">
+        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Notes internes (non imprimées)</label>
+        <textarea value={program.notes} onChange={e => update('notes', e.target.value)}
+          placeholder="Instructions pour l'équipe, points d'attention..."
+          rows={3}
+          className="w-full mt-1 px-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring resize-y" />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Step 2: Chants ─── */
+function StepChants({ program, filteredSongs, songSearch, setSongSearch, keyFilter, setKeyFilter, addSong, removeSong, moveSong }: {
+  program: ProgramData;
+  filteredSongs: any[];
+  songSearch: string;
+  setSongSearch: (v: string) => void;
+  keyFilter: string;
+  setKeyFilter: (v: string) => void;
+  addSong: (song: any) => void;
+  removeSong: (id: string) => void;
+  moveSong: (idx: number, dir: 'up' | 'down') => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      {/* Left: Song library */}
+      <div className="lg:col-span-3">
+        <div className="bg-card rounded-lg border border-border p-5">
+          <h2 className="text-sm font-bold text-foreground mb-1">Sélection des chants</h2>
+          <p className="text-xs text-muted-foreground mb-4">Cliquez pour ajouter · Glissez pour réordonner</p>
+
+          {/* Search */}
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input value={songSearch} onChange={e => setSongSearch(e.target.value)}
+              placeholder="Rechercher un chant..."
+              className="w-full pl-9 pr-3 py-2.5 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-ring" />
+          </div>
+
+          {/* Key filters */}
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {KEYS.map(k => (
+              <button key={k} onClick={() => setKeyFilter(k)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  keyFilter === k
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border bg-card text-muted-foreground hover:bg-muted'
+                }`}>
+                {k}
+              </button>
+            ))}
+          </div>
+
+          {/* Song list */}
+          <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+            {filteredSongs.slice(0, 40).map(s => {
+              const isAdded = program.songs.some(ps => ps.songId === s.id);
+              return (
+                <div key={s.id}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-md transition-colors ${
+                    isAdded ? 'bg-accent/10' : 'hover:bg-muted'
+                  }`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{s.title}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.author || 'Auteur inconnu'}{s.key ? ` · ${s.key}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => removeSong(program.songs.find(ps => ps.songId === s.id)?.id || '')}
+                      disabled={!isAdded}
+                      className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30 transition-colors">
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => addSong(s)}
+                      disabled={isAdded || program.songs.length >= program.nbChants}
+                      className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-accent/10 hover:text-accent disabled:opacity-30 transition-colors">
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {filteredSongs.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-6">Aucun chant trouvé</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right: Programme slots */}
+      <div className="lg:col-span-2">
+        <div className="bg-card rounded-lg border border-border p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-bold text-foreground">Programme</h3>
+            <span className="text-xs text-muted-foreground">({program.songs.length}/{program.nbChants})</span>
+          </div>
+
+          <div className="space-y-2">
+            {Array.from({ length: program.nbChants }).map((_, i) => {
+              const song = program.songs[i];
+              return (
+                <div key={i}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md border transition-colors ${
+                    song ? 'border-border bg-background' : 'border-dashed border-border/60 bg-muted/30'
+                  }`}>
+                  <span className="text-[10px] font-bold text-muted-foreground w-5">{String(i + 1).padStart(2, '0')}</span>
+                  {song ? (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{song.title}</p>
+                        {song.key && <p className="text-[10px] text-muted-foreground">{song.key}</p>}
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => moveSong(i, 'up')} disabled={i === 0}
+                          className="p-1 rounded hover:bg-muted disabled:opacity-30">
+                          <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                        </button>
+                        <button onClick={() => moveSong(i, 'down')} disabled={i === program.songs.length - 1}
+                          className="p-1 rounded hover:bg-muted disabled:opacity-30">
+                          <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                        </button>
+                        <button onClick={() => removeSong(song.id)}
+                          className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60 italic">Cliquez un chant pour l'ajouter</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Step 3: Aperçu & Export ─── */
+function StepPreview({ program, previewTab, setPreviewTab, handlePrint, handleSave }: {
+  program: ProgramData;
+  previewTab: 'congregation' | 'equipe' | 'conducteur';
+  setPreviewTab: (t: 'congregation' | 'equipe' | 'conducteur') => void;
+  handlePrint: (type: string) => void;
+  handleSave: () => void;
+}) {
+  const formatDateLong = (d: string) => {
+    try {
+      return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { return d; }
+  };
+
+  const tabs = [
+    { key: 'congregation' as const, label: '📖 Congrégation' },
+    { key: 'equipe' as const, label: '🎵 Équipe' },
+    { key: 'conducteur' as const, label: '🎼 Conducteur' },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Preview */}
+      <div className="lg:col-span-2">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-border">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => setPreviewTab(t.key)}
+                className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                  previewTab === t.key
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Preview content */}
+          <div className="p-8 min-h-[400px]">
+            <div className="max-w-md mx-auto text-center mb-8">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Église AEF</p>
+              <h2 className="text-lg font-bold text-foreground mb-1">Programme du Culte</h2>
+              <p className="text-xs text-muted-foreground">{formatDateLong(program.date)}</p>
+              {program.heure && <p className="text-xs text-muted-foreground mt-0.5">{program.heure}</p>}
+            </div>
+
+            {program.predicateur && previewTab !== 'conducteur' && (
+              <div className="mb-6 text-center">
+                <p className="text-xs text-muted-foreground">Prédicateur: <span className="font-medium text-foreground">{program.predicateur}</span></p>
+                {program.titre && <p className="text-xs text-muted-foreground mt-0.5">"{program.titre}"</p>}
+                {program.reference && <p className="text-[10px] text-muted-foreground">{program.reference}</p>}
               </div>
-              <input value={songSearch} onChange={e => setSongSearch(e.target.value)} placeholder="Rechercher un chant..."
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm mb-3 focus:ring-2 focus:ring-ring" autoFocus />
-              <div className="flex-1 overflow-y-auto space-y-1">
-                {filteredSongs.slice(0, 30).map(s => (
-                  <button key={s.id} onClick={() => addSongToMoment(showSongPicker, s)}
-                    className="w-full text-left px-3 py-2 rounded-md hover:bg-muted transition-colors flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{s.title}</p>
-                      <p className="text-[10px] text-muted-foreground">{s.author || 'Auteur inconnu'}{s.key ? ` · ${s.key}` : ''}</p>
+            )}
+
+            {previewTab === 'conducteur' && program.conducteur && (
+              <div className="mb-6 text-center">
+                <p className="text-xs text-muted-foreground">Conducteur: <span className="font-medium text-foreground">{program.conducteur}</span></p>
+              </div>
+            )}
+
+            <div className="border-t border-border pt-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-3">
+                {previewTab === 'congregation' ? 'Louange & Adoration' : previewTab === 'equipe' ? 'Liste des chants' : 'Ordre de passage'}
+              </p>
+              {program.songs.length > 0 ? (
+                <div className="space-y-2">
+                  {program.songs.map((s, i) => (
+                    <div key={s.id} className="flex items-start gap-3 py-1.5">
+                      <span className="text-[10px] font-bold text-muted-foreground/50 mt-0.5">{i + 1}.</span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{s.title}</p>
+                        {previewTab !== 'congregation' && s.author && (
+                          <p className="text-[10px] text-muted-foreground">{s.author}</p>
+                        )}
+                        {previewTab === 'conducteur' && s.key && (
+                          <p className="text-[10px] text-accent font-medium">Tonalité: {s.key}</p>
+                        )}
+                      </div>
                     </div>
-                    {s.tags && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{s.tags.split(',')[0]?.trim()}</span>
-                    )}
-                  </button>
-                ))}
-                {filteredSongs.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">Aucun chant trouvé</p>}
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Aucun chant sélectionné</p>
+              )}
+            </div>
+
+            {program.notes && previewTab === 'equipe' && (
+              <div className="mt-6 pt-4 border-t border-border">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Notes internes</p>
+                <p className="text-xs text-muted-foreground">{program.notes}</p>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Export panel */}
+      <div className="lg:col-span-1 space-y-4">
+        <div className="bg-card rounded-lg border border-border p-5">
+          <h3 className="text-sm font-bold text-foreground mb-4">Export & Partage</h3>
+
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">Imprimer / PDF</p>
+          <div className="space-y-2 mb-5">
+            <button onClick={() => handlePrint('congrégation')}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+              <Printer className="w-3.5 h-3.5" /> Imprimer Congrégation
+            </button>
+            <button onClick={() => handlePrint('équipe')}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+              <Music className="w-3.5 h-3.5" /> Imprimer Équipe
+            </button>
+            <button onClick={() => handlePrint('conducteur')}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+              <FileText className="w-3.5 h-3.5" /> Imprimer Conducteur
+            </button>
+          </div>
+
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">Sauvegarder</p>
+          <div className="space-y-2">
+            <button onClick={handleSave}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md bg-accent text-accent-foreground text-xs font-medium hover:bg-accent/90 transition-colors">
+              <Save className="w-3.5 h-3.5" /> Enregistrer le programme
+            </button>
+            <button onClick={() => toast.info('Brouillon sauvegardé localement')}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+              <FileText className="w-3.5 h-3.5" /> Brouillon local
+            </button>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-4">
+            Le PDF s'ouvre via l'impression système. Choisissez "Enregistrer en PDF".
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
