@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getMembers, updateMember } from '@/lib/api';
-import { Search, Shield, Key, X, Check } from 'lucide-react';
+import { getMembers, updateMember, createMember, deleteMember } from '@/lib/api';
+import { Search, Shield, Key, X, Check, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 const ROLES = [
   'conducteur_louange', 'responsable_louange', 'responsable_technique',
@@ -34,15 +35,40 @@ export default function ComptesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<EditUser>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ first_name: '', last_name: '', email: '', role: 'choriste' });
 
   const load = () => { setLoading(true); getMembers().then(setUsers).catch(() => setUsers([])).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
 
   const handleUpdateRole = async () => {
     if (!editing) return;
-    await updateMember(editing.id, { role: editing.roles.join(',') });
-    setEditing(null);
-    load();
+    try {
+      await updateMember(editing.id, { role: editing.roles.join(',') });
+      toast.success('Rôles mis à jour');
+      setEditing(null);
+      load();
+    } catch { toast.error('Erreur lors de la mise à jour'); }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createMember(createForm);
+      toast.success('Compte créé');
+      setCreateForm({ first_name: '', last_name: '', email: '', role: 'choriste' });
+      setShowCreate(false);
+      load();
+    } catch { toast.error('Erreur lors de la création'); }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
+    try {
+      await deleteMember(id);
+      toast.success('Compte supprimé');
+      load();
+    } catch { toast.error('Erreur lors de la suppression'); }
   };
 
   const toggleRole = (role: string) => {
@@ -62,7 +88,30 @@ export default function ComptesPage() {
     <div>
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold text-foreground flex items-center gap-2">🔐 Gestion des comptes</h1>
+        <button onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-md border-2 border-accent text-accent text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+          <Plus className="w-4 h-4" /> Nouveau compte
+        </button>
       </div>
+
+      {/* Create form */}
+      <AnimatePresence>
+        {showCreate && (
+          <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            onSubmit={handleCreate} className="bg-card rounded-lg border border-border p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-hidden">
+            <input value={createForm.first_name} onChange={e => setCreateForm({ ...createForm, first_name: e.target.value })} placeholder="Prénom" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
+            <input value={createForm.last_name} onChange={e => setCreateForm({ ...createForm, last_name: e.target.value })} placeholder="Nom" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
+            <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} placeholder="Email" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
+            <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="px-3 py-2 rounded-md border border-input bg-background text-sm">
+              {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+            </select>
+            <div className="sm:col-span-2 flex gap-2">
+              <button type="submit" className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium">Créer</button>
+              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-md border border-border text-sm">Annuler</button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
 
       <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
         <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : users.length}</span><p className="text-xs text-muted-foreground">Utilisateurs</p></div>
@@ -151,6 +200,10 @@ export default function ComptesPage() {
                   </button>
                   <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-warning hover:bg-warning/10">
                     <Key className="w-3 h-3" /> Reset MDP
+                  </button>
+                  <button onClick={() => handleDelete(u.id, `${u.first_name} ${u.last_name}`)}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-destructive hover:bg-destructive/10">
+                    <Trash2 className="w-3 h-3" /> Supprimer
                   </button>
                 </div>
               </motion.div>
