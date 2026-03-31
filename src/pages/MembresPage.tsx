@@ -247,7 +247,7 @@ export default function MembresPage() {
                     <span key={f} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{FUNCTION_LABELS[f] || f}</span>
                   ))}
                 </div>
-                {m.instrument && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold font-medium">🎵 {m.instrument}</span>}
+                {m.instruments?.length > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold font-medium">🎵 {m.instruments.join(', ')}</span>}
               </motion.div>
             );
           })}
