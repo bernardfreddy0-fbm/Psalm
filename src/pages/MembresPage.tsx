@@ -242,7 +242,11 @@ export default function MembresPage() {
                 </div>
                 <div className={`w-14 h-14 rounded-full ${color} flex items-center justify-center text-sm font-bold text-card mx-auto mb-2 ring-4 ring-card shadow-sm`}>{initials}</div>
                 <p className="text-sm font-semibold text-foreground">{m.first_name} {m.last_name}</p>
-                <p className="text-[11px] text-muted-foreground mb-2">{roleLabel(m.role)}</p>
+                <div className="flex flex-wrap justify-center gap-0.5 mb-1">
+                  {(m.functions || []).map((f: string) => (
+                    <span key={f} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">{FUNCTION_LABELS[f] || f}</span>
+                  ))}
+                </div>
                 {m.instrument && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold font-medium">🎵 {m.instrument}</span>}
               </motion.div>
             );
