@@ -8,7 +8,9 @@ const ROLES = [
   'conducteur_louange', 'responsable_technique',
   'pasteur', 'choriste', 'musicien', 'sonorisateur', 'projectionniste', 'videaste', 'dev'
 ];
-const roleLabel = (r: string) => r?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Membre';
+
+const normalizeRole = (role: string) => role === 'responsable_louange' ? 'conducteur_louange' : role;
+const roleLabel = (r: string) => normalizeRole(r)?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Membre';
 
 const ROLE_COLORS: Record<string, string> = {
   pasteur: 'bg-destructive/10 text-destructive',
@@ -25,30 +27,58 @@ const ROLE_COLORS: Record<string, string> = {
 
 function parseUserRoles(role: string): string[] {
   if (!role) return [];
-  return role.split(',').map(r => r.trim()).filter(Boolean);
+
+  return Array.from(new Set(role.split(',').map(r => normalizeRole(r.trim())).filter(Boolean)));
 }
+
+function isVisibleUser(user: any): boolean {
+  return String(user?.is_active ?? 1) !== '0' && user?.first_name !== '[Supprimé]';
+}
+
+type AccountUser = {
+  id: string | number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  is_active?: string | number;
+};
 
 type EditUser = { id: string; email: string; roles: string[] } | null;
 
 export default function ComptesPage() {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<AccountUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<EditUser>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ first_name: '', last_name: '', email: '', role: 'choriste' });
 
-  const load = () => { setLoading(true); getMembers().then(setUsers).catch(() => setUsers([])).finally(() => setLoading(false)); };
+  const load = () => {
+    setLoading(true);
+    getMembers()
+      .then(data => setUsers(data.filter(isVisibleUser)))
+      .catch(() => setUsers([]))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => { load(); }, []);
 
   const handleUpdateRole = async () => {
     if (!editing) return;
+
+    const nextRoles = Array.from(new Set(editing.roles.map(normalizeRole).filter(Boolean)));
+    const nextRoleValue = nextRoles.join(',');
+
     try {
-      await updateMember(editing.id, { role: editing.roles.join(',') });
+      await updateMember(editing.id, { role: nextRoleValue });
+      setUsers(prev => prev.map(user => String(user.id) === editing.id ? { ...user, role: nextRoleValue } : user));
       toast.success('Rôles mis à jour');
       setEditing(null);
       load();
-    } catch { toast.error('Erreur lors de la mise à jour'); }
+    } catch {
+      toast.error('Erreur lors de la mise à jour');
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -59,15 +89,19 @@ export default function ComptesPage() {
       setCreateForm({ first_name: '', last_name: '', email: '', role: 'choriste' });
       setShowCreate(false);
       load();
-    } catch { toast.error('Erreur lors de la création'); }
+    } catch {
+      toast.error('Erreur lors de la création');
+    }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (id: string | number, name: string) => {
     if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
+
     try {
       console.log('[ComptesPage] Deleting member id:', id, 'name:', name);
       const result = await deleteMember(String(id));
       console.log('[ComptesPage] Delete result:', result);
+      setUsers(prev => prev.filter(user => String(user.id) !== String(id)));
       toast.success('Compte supprimé');
       load();
     } catch (err: any) {
@@ -77,11 +111,16 @@ export default function ComptesPage() {
   };
 
   const toggleRole = (role: string) => {
+    const normalizedRole = normalizeRole(role);
     if (!editing) return;
+
     setEditing(prev => {
       if (!prev) return prev;
-      const has = prev.roles.includes(role);
-      return { ...prev, roles: has ? prev.roles.filter(r => r !== role) : [...prev.roles, role] };
+      const has = prev.roles.includes(normalizedRole);
+      return {
+        ...prev,
+        roles: has ? prev.roles.filter(r => r !== normalizedRole) : [...prev.roles, normalizedRole],
+      };
     });
   };
 
@@ -161,7 +200,7 @@ export default function ComptesPage() {
                   {editing.roles.map(r => (
                     <span key={r} className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[r] || 'bg-muted text-muted-foreground'}`}>
                       {roleLabel(r)}
-                      <button onClick={() => toggleRole(r)}><X className="w-3 h-3" /></button>
+                      <button type="button" onClick={() => toggleRole(r)}><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                 </div>
@@ -199,7 +238,7 @@ export default function ComptesPage() {
                   )}
                 </div>
                 <div className="col-span-3 flex gap-1 justify-end">
-                  <button onClick={() => setEditing({ id: u.id, email: u.email, roles: roles.length > 0 ? roles : ['choriste'] })}
+                  <button onClick={() => setEditing({ id: String(u.id), email: u.email, roles: roles.length > 0 ? roles : ['choriste'] })}
                     className="flex items-center gap-1 px-2 py-1 rounded text-xs text-accent hover:bg-accent/10">
                     <Shield className="w-3 h-3" /> Rôles
                   </button>
