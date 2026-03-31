@@ -22,7 +22,12 @@ const ROLE_COLORS: Record<string, string> = {
   responsable_technique: 'bg-info/10 text-info',
 };
 
-type EditUser = { id: string; email: string; role: string } | null;
+type EditUser = { id: string; email: string; roles: string[] } | null;
+
+function parseUserRoles(role: string): string[] {
+  if (!role) return [];
+  return role.split(',').map(r => r.trim()).filter(Boolean);
+}
 
 export default function ComptesPage() {
   const [users, setUsers] = useState<any[]>([]);
