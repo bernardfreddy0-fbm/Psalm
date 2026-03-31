@@ -9,7 +9,12 @@ const ROLES = [
   'pasteur', 'choriste', 'musicien', 'sonorisateur', 'projectionniste', 'videaste', 'dev'
 ];
 
+// Client display normalization
 const normalizeRole = (role: string) => role === 'responsable_louange' ? 'conducteur_louange' : role;
+
+// Reverse: convert back to API format before saving
+const toApiRole = (role: string) => role === 'conducteur_louange' ? 'responsable_louange' : role;
+
 const roleLabel = (r: string) => normalizeRole(r)?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Membre';
 
 const ROLE_COLORS: Record<string, string> = {
