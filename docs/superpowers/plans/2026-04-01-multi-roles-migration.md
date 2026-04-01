@@ -15,7 +15,7 @@
 **Files:**
 - Aucun fichier applicatif modifié — opération SQL directe sur le serveur
 
-- [ ] **Step 1 : Vérifier le type actuel de la colonne**
+- [x] **Step 1 : Vérifier le type actuel de la colonne**
 
 ```bash
 ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
@@ -28,7 +28,7 @@ Field  Type                                                          Null  Key  
 role   enum('responsable_louange','responsable_technique',...)       NO    MUL  choriste
 ```
 
-- [ ] **Step 2 : Exécuter la migration ALTER TABLE**
+- [x] **Step 2 : Exécuter la migration ALTER TABLE**
 
 ```bash
 ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
@@ -37,7 +37,7 @@ ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
 
 Expected : aucune sortie (MySQL n'affiche rien en cas de succès).
 
-- [ ] **Step 3 : Vérifier que la migration a bien été appliquée**
+- [x] **Step 3 : Vérifier que la migration a bien été appliquée**
 
 ```bash
 ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
@@ -50,7 +50,7 @@ Field  Type          Null  Key  Default   Extra
 role   varchar(255)  NO    MUL  choriste
 ```
 
-- [ ] **Step 4 : Vérifier que les données existantes sont intactes**
+- [x] **Step 4 : Vérifier que les données existantes sont intactes**
 
 ```bash
 ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
@@ -59,7 +59,7 @@ ssh -o StrictHostKeyChecking=no bqzk4896@yellow.o2switch.net \
 
 Expected : les mêmes valeurs qu'avant la migration (`choriste`, `videaste`, `responsable_louange`, etc.) — aucune ligne avec une valeur vide inattendue.
 
-- [ ] **Step 5 : Tester la persistance d'un rôle multiple via POST**
+- [x] **Step 5 : Tester la persistance d'un rôle multiple via POST**
 
 ```bash
 # Sauvegarder le rôle actuel de James (id=44) avant le test
@@ -87,7 +87,7 @@ Rôle avant : videaste
 Rôle après : videaste,musicien
 ```
 
-- [ ] **Step 6 : Restaurer le rôle de James**
+- [x] **Step 6 : Restaurer le rôle de James**
 
 ```bash
 curl -s -X POST "https://api-psalm.a-e-f.fr/members.php?action=update" \
@@ -99,7 +99,7 @@ echo ""
 
 Expected : `{"success":true}`
 
-- [ ] **Step 7 : Commit**
+- [x] **Step 7 : Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
