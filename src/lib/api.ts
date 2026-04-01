@@ -107,9 +107,19 @@ export const createMember = (data: { first_name: string; last_name: string; emai
   if (data.instrument) url += `&instrument=${encodeURIComponent(data.instrument)}`;
   return api(url);
 };
-export const updateMember = (id: string, data: Record<string, string>) => {
-  const params = Object.entries(data).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  return api(`members.php?action=update&id=${id}&${params}`);
+export const updateMember = async (id: string, data: Record<string, string>) => {
+  const res = await fetch(`${API_BASE}/members.php?action=update`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Session-Token': getToken(),
+    },
+    body: JSON.stringify({ id, ...data }),
+    cache: 'no-store',
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || json.message || 'Erreur mise à jour');
+  return json;
 };
 export const deleteMember = (id: string) => api(`members.php?action=delete&id=${id}`);
 
