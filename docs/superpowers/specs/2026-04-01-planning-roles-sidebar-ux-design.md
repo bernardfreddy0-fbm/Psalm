@@ -107,7 +107,7 @@ const data: Record<string, string> = {
 };
 ```
 
-L'`EditForm` interface doit inclure `evenement: string`.
+L'`EditForm` interface doit inclure `evenement: string`. La fonction `openEdit` doit l'initialiser : `evenement: s.evenement || ''`.
 
 ---
 
@@ -291,6 +291,8 @@ Actuellement le `<header>` est vide côté desktop. Ajouter :
 ## Zone 4 : UX Rapides
 
 ### Badge chants dynamique — `AppLayout.tsx`
+
+Ajouter l'import : `import { getSongs } from '@/lib/api';`
 
 Supprimer `badge: '192'` hardcodé. Ajouter un `useEffect` dans `AppLayout` qui charge le count depuis l'API :
 
