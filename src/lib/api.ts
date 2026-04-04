@@ -127,9 +127,19 @@ export const deleteMember = (id: string) => api(`members.php?action=delete&id=${
 export const getPlanning = (year: number) => api<any[]>(`sundays.php?action=list&year=${year}`);
 export const createSunday = (date: string, label: string) =>
   api(`sundays.php?action=create&date=${date}&label=${encodeURIComponent(label)}`);
-export const updateSunday = (id: string, data: Record<string, string>) => {
-  const params = Object.entries(data).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  return api(`sundays.php?action=update&id=${id}&${params}`);
+export const updateSunday = async (id: string, data: Record<string, string>) => {
+  const res = await fetch(`${API_BASE}/sundays.php?action=update`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Session-Token': getToken(),
+    },
+    body: JSON.stringify({ id, ...data }),
+    cache: 'no-store',
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || json.message || 'Erreur mise à jour');
+  return json;
 };
 export const deleteSunday = (id: string) => api(`sundays.php?action=delete&id=${id}`);
 
