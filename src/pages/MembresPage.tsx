@@ -17,6 +17,11 @@ const ROLE_LABELS: Record<string, string> = {
   conducteur_louange: 'Dirigeant',
   choriste: 'Choriste',
   musicien: 'Musicien',
+  pianiste: 'Pianiste',
+  batteur: 'Batteur',
+  guitariste_electrique: 'Guit. élec.',
+  guitariste_acoustique: 'Guit. acou.',
+  bassiste: 'Bassiste',
   sonorisateur: 'Sonorisateur',
   projectionniste: 'Projectionniste',
   videaste: 'Vidéaste',
@@ -28,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const POLE_ROLES: Record<string, string[]> = {
   'Choriste & Dirigeant': ['choriste', 'dirigeant', 'conducteur_louange', 'responsable_louange'],
-  'Musique': ['musicien'],
+  'Musique': ['musicien', 'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste'],
   'Sonorisation': ['sonorisateur', 'responsable_technique'],
   'Projection': ['projectionniste'],
   'Vidéo': ['videaste'],

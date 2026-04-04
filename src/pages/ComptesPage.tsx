@@ -6,7 +6,9 @@ import { toast } from 'sonner';
 
 const ROLES = [
   'conducteur_louange', 'responsable_technique',
-  'pasteur', 'choriste', 'musicien', 'sonorisateur', 'projectionniste', 'videaste', 'dev'
+  'pasteur', 'choriste',
+  'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste',
+  'sonorisateur', 'projectionniste', 'videaste', 'dev'
 ];
 
 // Client display normalization
@@ -24,6 +26,11 @@ const ROLE_COLORS: Record<string, string> = {
   dev: 'bg-foreground/10 text-foreground',
   choriste: 'bg-success/10 text-success',
   musicien: 'bg-gold/10 text-gold',
+  pianiste: 'bg-gold/10 text-gold',
+  batteur: 'bg-gold/10 text-gold',
+  guitariste_electrique: 'bg-gold/10 text-gold',
+  guitariste_acoustique: 'bg-gold/10 text-gold',
+  bassiste: 'bg-gold/10 text-gold',
   sonorisateur: 'bg-info/10 text-info',
   projectionniste: 'bg-warning/10 text-warning',
   videaste: 'bg-purple-500/10 text-purple-600',
