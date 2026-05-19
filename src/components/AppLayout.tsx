@@ -3,7 +3,8 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Church, Users, Repeat,
-  Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText
+  Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText,
+  CalendarCheck, Video, BookOpen,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -20,19 +21,27 @@ const navSections = [
     items: [
       { to: '/evenements', icon: CalendarRange, label: 'Événements' },
       { to: '/cultes', icon: Church, label: 'Cultes' },
+      { to: '/disponibilites', icon: CalendarCheck, label: 'Disponibilités' },
     ],
   },
   {
     label: 'ÉQUIPES',
     items: [
-      { to: '/membres', icon: Users, label: 'Membres', sub: ['Tous les membres', 'Ajouter un membre'] },
+      { to: '/membres', icon: Users, label: 'Membres' },
       { to: '/rotations', icon: Repeat, label: 'Rotations' },
     ],
   },
   {
     label: 'LOUANGE',
     items: [
-      { to: '/chants', icon: Music, label: 'Bibliothèque', badge: '192', sub: ['Tous les chants', 'Ajouter un chant'] },
+      { to: '/chants', icon: Music, label: 'Bibliothèque' },
+    ],
+  },
+  {
+    label: 'CULTE',
+    items: [
+      { to: '/predications', icon: BookOpen, label: 'Prédications' },
+      { to: '/archives', icon: Video, label: 'Archives vidéo' },
     ],
   },
   {
@@ -59,6 +68,9 @@ const pageTitles: Record<string, string> = {
   '/permissions': 'Permissions',
   '/journal': 'Journal d\'activité',
   '/configuration': 'Configuration',
+  '/disponibilites': 'Disponibilités & Absences',
+  '/archives': 'Archives vidéo',
+  '/predications': 'Prédications',
   '/admin': 'Administration',
 };
 

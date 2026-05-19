@@ -17,6 +17,9 @@ import ComptesPage from "@/pages/ComptesPage";
 import PermissionsPage from "@/pages/PermissionsPage";
 import JournalPage from "@/pages/JournalPage";
 import ConfigurationPage from "@/pages/ConfigurationPage";
+import DisponibilitesPage from "@/pages/DisponibilitesPage";
+import ArchivesAdminPage from "@/pages/ArchivesAdminPage";
+import PredicationsPage from "@/pages/PredicationsPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -54,6 +57,9 @@ function AppRoutes() {
         <Route path="/permissions" element={<Guard action="config_edit"><PermissionsPage /></Guard>} />
         <Route path="/journal" element={<Guard action="config_edit"><JournalPage /></Guard>} />
         <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />
+        <Route path="/disponibilites" element={<Guard action="planning_view"><DisponibilitesPage /></Guard>} />
+        <Route path="/archives" element={<Guard action="archives_view"><ArchivesAdminPage /></Guard>} />
+        <Route path="/predications" element={<Guard action="config_view"><PredicationsPage /></Guard>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -662,3 +662,206 @@ export async function getActivityActions() {
     { value: 'song',     label: 'Chants',            emoji: '🎵' },
   ];
 }
+
+// ── Disponibilités (vue admin) ────────────────────────────────────────────────
+
+export interface DispoEntry {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  available: boolean | null;
+  note: string | null;
+  responded_at: string | null;
+}
+
+export interface SundayDispo {
+  sunday_id: string;
+  date: string;
+  label: string;
+  is_jeunesse: boolean;
+  dispo_deadline: string | null;
+  responses: DispoEntry[];
+  total_members: number;
+  responded_count: number;
+  available_count: number;
+}
+
+export async function getDisponibilitesAdmin(year?: number): Promise<SundayDispo[]> {
+  const y = year ?? new Date().getFullYear();
+  const { data: sundays, error } = await supabaseAdmin
+    .from('sundays')
+    .select('id, date, label, is_jeunesse, dispo_deadline')
+    .gte('date', `${y}-01-01`)
+    .lte('date', `${y}-12-31`)
+    .order('date');
+  if (error) throw new Error(error.message);
+
+  const { data: dispos } = await supabaseAdmin
+    .from('disponibilites')
+    .select('sunday_id, user_id, available, note, responded_at, profiles(first_name, last_name, role)')
+    .in('sunday_id', (sundays || []).map((s: any) => s.id));
+
+  const { data: members } = await supabaseAdmin
+    .from('profiles')
+    .select('id', { count: 'exact', head: false })
+    .eq('is_active', true)
+    .not('first_name', 'eq', '[Supprimé]');
+  const totalMembers = members?.length ?? 0;
+
+  const dispoMap = new Map<number, DispoEntry[]>();
+  for (const d of dispos || []) {
+    const p = d.profiles as any;
+    const entry: DispoEntry = {
+      user_id: d.user_id,
+      first_name: p?.first_name || '',
+      last_name: p?.last_name || '',
+      role: p?.role || '',
+      available: d.available,
+      note: d.note,
+      responded_at: d.responded_at,
+    };
+    if (!dispoMap.has(d.sunday_id)) dispoMap.set(d.sunday_id, []);
+    dispoMap.get(d.sunday_id)!.push(entry);
+  }
+
+  return (sundays || []).map((s: any) => {
+    const responses = dispoMap.get(s.id) || [];
+    return {
+      sunday_id: String(s.id),
+      date: s.date,
+      label: s.label,
+      is_jeunesse: s.is_jeunesse,
+      dispo_deadline: s.dispo_deadline,
+      responses,
+      total_members: totalMembers,
+      responded_count: responses.length,
+      available_count: responses.filter(r => r.available === true).length,
+    };
+  });
+}
+
+export async function setDispoDeadline(sundayId: string, deadline: string | null): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('sundays')
+    .update({ dispo_deadline: deadline })
+    .eq('id', Number(sundayId));
+  if (error) throw new Error(error.message);
+}
+
+// ── Absences (vue admin) ──────────────────────────────────────────────────────
+
+export interface AdminAbsence {
+  id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  sunday_date: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
+  const y = year ?? new Date().getFullYear();
+  const { data, error } = await supabaseAdmin
+    .from('absences')
+    .select('id, user_id, sunday_date, reason, created_at, profiles(first_name, last_name, role)')
+    .gte('sunday_date', `${y}-01-01`)
+    .lte('sunday_date', `${y}-12-31`)
+    .order('sunday_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map((a: any) => ({
+    id: String(a.id),
+    user_id: a.user_id,
+    first_name: a.profiles?.first_name || '',
+    last_name: a.profiles?.last_name || '',
+    role: a.profiles?.role || '',
+    sunday_date: a.sunday_date,
+    reason: a.reason || null,
+    created_at: a.created_at,
+  }));
+}
+
+export async function deleteAbsenceAdmin(id: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('absences').delete().eq('id', Number(id));
+  if (error) throw new Error(error.message);
+}
+
+// ── Archives vidéo (video_meta) ───────────────────────────────────────────────
+
+export interface VideoMetaSummary {
+  video_id: string;
+  preacher: string | null;
+  theme: string | null;
+  tags: string[];
+  checklist: {
+    montage: boolean;
+    subtitles: boolean;
+    thumbnail: boolean;
+    description_yt: boolean;
+    published: boolean;
+  };
+  updated_at: string | null;
+}
+
+export async function getVideoMetaList(): Promise<VideoMetaSummary[]> {
+  const { data, error } = await supabaseAdmin
+    .from('video_meta')
+    .select('video_id, preacher, theme, tags, checklist, updated_at')
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map((r: any) => ({
+    video_id: r.video_id,
+    preacher: r.preacher ?? null,
+    theme: r.theme ?? null,
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    checklist: r.checklist ?? { montage: false, subtitles: false, thumbnail: false, description_yt: false, published: false },
+    updated_at: r.updated_at ?? null,
+  }));
+}
+
+export async function deleteVideoMeta(videoId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('video_meta').delete().eq('video_id', videoId);
+  if (error) throw new Error(error.message);
+}
+
+// ── Prédications / Sermons ────────────────────────────────────────────────────
+
+export interface Sermon {
+  id?: string;
+  title: string;
+  date: string;
+  preacher: string;
+  scripture?: string | null;
+  series?: string | null;
+  notes?: string | null;
+  youtube_url?: string | null;
+}
+
+export async function getSermons(): Promise<Sermon[]> {
+  const { data, error } = await supabaseAdmin
+    .from('config')
+    .select('key, value')
+    .like('key', 'sermon_%')
+    .order('key', { ascending: false });
+  if (error) return [];
+  return (data || []).map((r: any) => {
+    try { return { id: r.key, ...JSON.parse(r.value) }; }
+    catch { return null; }
+  }).filter(Boolean) as Sermon[];
+}
+
+export async function saveSermon(sermon: Sermon): Promise<void> {
+  const key = sermon.id || `sermon_${sermon.date}_${Date.now()}`;
+  const { id: _id, ...rest } = sermon;
+  const { error } = await supabaseAdmin
+    .from('config')
+    .upsert({ key, value: JSON.stringify(rest), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteSermon(id: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('config').delete().eq('key', id);
+  if (error) throw new Error(error.message);
+}
