@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getMembers } from '@/lib/api';
 import { Users, Grid3X3, List, Search, Eye, X, Phone, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -39,18 +40,25 @@ const POLE_ROLES: Record<string, string[]> = {
   'Vidéo': ['videaste'],
 };
 
+const CHORISTE_ROLES = ['choriste', 'dirigeant', 'conducteur_louange', 'responsable_louange'];
+const MUSICIEN_ROLES = ['musicien', 'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste'];
+const TECH_ROLES = ['sonorisateur', 'responsable_technique', 'projectionniste', 'videaste'];
+
 function parseRoles(role: string): string[] {
   if (!role) return [];
   return role.split(',').map(r => r.trim()).filter(Boolean);
 }
 
+type SortOrder = 'A → Z' | 'Z → A' | 'Par rôle';
 type ViewMember = { first_name: string; last_name: string; email: string; phone: string; roles: string[] } | null;
 
 export default function MembresPage() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activePole, setActivePole] = useState('Tous');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('A → Z');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [viewing, setViewing] = useState<ViewMember>(null);
 
@@ -65,6 +73,20 @@ export default function MembresPage() {
     return matchSearch && matchPole;
   });
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortOrder === 'A → Z') return `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
+    if (sortOrder === 'Z → A') return `${b.first_name} ${b.last_name}`.localeCompare(`${a.first_name} ${a.last_name}`);
+    // Par rôle : trier par premier rôle alphabétiquement (via label)
+    const roleA = parseRoles(a.role)[0] || '';
+    const roleB = parseRoles(b.role)[0] || '';
+    return (ROLE_LABELS[roleA] || roleA).localeCompare(ROLE_LABELS[roleB] || roleB);
+  });
+
+  const countByPole = (roles: string[]) => (member: any) => parseRoles(member.role).some(r => roles.includes(r));
+  const nbChoristes = members.filter(countByPole(CHORISTE_ROLES)).length;
+  const nbMusiciens = members.filter(countByPole(MUSICIEN_ROLES)).length;
+  const nbTech = members.filter(countByPole(TECH_ROLES)).length;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
@@ -72,10 +94,18 @@ export default function MembresPage() {
       </div>
 
       {/* Stats */}
-      <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
+      <div className="bg-card rounded-lg border border-border p-4 mb-4 flex flex-wrap gap-6 items-start">
         <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : members.length}</span><p className="text-xs text-muted-foreground">Total</p></div>
         <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{filtered.length}</span><p className="text-xs text-muted-foreground">Affichés</p></div>
-        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(members.flatMap(m => parseRoles(m.role))).size}</span><p className="text-xs text-muted-foreground">Rôles distincts</p></div>
+        <div className="border-l border-border pl-6">
+          <span className="text-2xl font-bold text-foreground">{new Set(members.flatMap(m => parseRoles(m.role))).size}</span>
+          <p className="text-xs text-muted-foreground">Rôles distincts</p>
+          {!loading && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {nbChoristes} Choristes · {nbMusiciens} Musiciens · {nbTech} Tech
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Search + Filters */}
@@ -93,6 +123,12 @@ export default function MembresPage() {
             </button>
           ))}
         </div>
+        <select value={sortOrder} onChange={e => setSortOrder(e.target.value as SortOrder)}
+          className="px-3 py-1.5 rounded-md border border-input bg-background text-xs">
+          <option>A → Z</option>
+          <option>Z → A</option>
+          <option>Par rôle</option>
+        </select>
         <div className="flex border border-border rounded-md overflow-hidden ml-auto">
           <button onClick={() => setViewMode('grid')} className={`p-1.5 ${viewMode === 'grid' ? 'bg-muted' : 'bg-card'}`}><Grid3X3 className="w-4 h-4" /></button>
           <button onClick={() => setViewMode('list')} className={`p-1.5 ${viewMode === 'list' ? 'bg-muted' : 'bg-card'}`}><List className="w-4 h-4" /></button>
@@ -121,12 +157,14 @@ export default function MembresPage() {
               <div className="space-y-3 text-sm">
                 {viewing.email && (
                   <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="w-4 h-4" /> <span>{viewing.email}</span>
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <a href={`mailto:${viewing.email}`} className="hover:text-accent underline underline-offset-2 break-all">{viewing.email}</a>
                   </div>
                 )}
                 {viewing.phone && (
                   <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="w-4 h-4" /> <span>{viewing.phone}</span>
+                    <Phone className="w-4 h-4 shrink-0" />
+                    <a href={`tel:${viewing.phone}`} className="hover:text-accent underline underline-offset-2">{viewing.phone}</a>
                   </div>
                 )}
                 <div>
@@ -138,6 +176,13 @@ export default function MembresPage() {
                   </div>
                 </div>
               </div>
+              <div className="mt-5 pt-4 border-t border-border">
+                <button
+                  onClick={() => { setViewing(null); navigate('/comptes'); }}
+                  className="w-full px-4 py-2 rounded-md border border-accent text-accent text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+                  Modifier
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -146,11 +191,11 @@ export default function MembresPage() {
       {/* Members */}
       {loading ? (
         <p className="text-sm text-muted-foreground">Chargement...</p>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun membre</p></div>
       ) : (
         <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3' : 'space-y-2'}>
-          {filtered.map((m, i) => {
+          {sorted.map((m, i) => {
             const initials = `${m.first_name?.[0] || ''}${m.last_name?.[0] || ''}`;
             const color = getAvatarColor(`${m.first_name}${m.last_name}`);
             const roles = parseRoles(m.role);

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getPlanning, getMembers } from '@/lib/api';
 import { Repeat, Users, BarChart3, AlertTriangle, CheckCircle, RefreshCw, TrendingUp, TrendingDown, Shield, Target, Lightbulb, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -7,11 +8,13 @@ import { computeEquityReport, type EquityReport } from '@/lib/equityEngine';
 type ViewTab = 'overview' | 'members' | 'equity' | 'roles';
 
 export default function RotationsPage() {
+  const navigate = useNavigate();
   const [sundays, setSundays] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewTab, setViewTab] = useState<ViewTab>('overview');
   const [roleFilter, setRoleFilter] = useState('Tous');
+  const [periodFilter, setPeriodFilter] = useState<'annee' | 'semestre' | 'trimestre'>('annee');
 
   useEffect(() => {
     setLoading(true);
@@ -24,10 +27,19 @@ export default function RotationsPage() {
     }).finally(() => setLoading(false));
   }, []);
 
+  const filteredSundays = useMemo(() => {
+    if (periodFilter === 'annee') return sundays;
+    const months = periodFilter === 'semestre' ? 6 : 3;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return sundays.filter(s => s.date >= cutoffStr);
+  }, [sundays, periodFilter]);
+
   const report: EquityReport | null = useMemo(() => {
-    if (!sundays.length && !members.length) return null;
-    return computeEquityReport(sundays, members);
-  }, [sundays, members]);
+    if (!filteredSundays.length && !members.length) return null;
+    return computeEquityReport(filteredSundays, members);
+  }, [filteredSundays, members]);
 
   const ROLE_FILTERS = ['Tous', 'Dirigeant', 'Choriste', 'Piano', 'Batterie', 'Guitare', 'Basse', 'Sonorisation', 'Projection', 'Vidéo'];
 
@@ -65,6 +77,18 @@ export default function RotationsPage() {
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2">🔄 Rotations & Équité</h1>
           <p className="text-xs text-muted-foreground">Algorithme de répartition équitable · {new Date().getFullYear()}</p>
+        </div>
+        <div className="flex gap-1">
+          {([
+            { key: 'annee', label: 'Année' },
+            { key: 'semestre', label: 'Semestre' },
+            { key: 'trimestre', label: 'Trimestre' },
+          ] as const).map(p => (
+            <button key={p.key} onClick={() => setPeriodFilter(p.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${periodFilter === p.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -369,6 +393,11 @@ export default function RotationsPage() {
                       <span className="text-sm font-semibold text-foreground">{r.action}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">{r.details}</p>
+                    <button
+                      onClick={() => navigate('/cultes')}
+                      className="mt-2 text-[11px] text-accent hover:underline font-medium transition-colors">
+                      → Voir le planning
+                    </button>
                   </div>
                 ))}
               </div>
@@ -385,8 +414,13 @@ export default function RotationsPage() {
                 {report.members.filter(m => m.count === 0).map(p => (
                   <div key={p.name} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-xs">
                     <span className="w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" />
-                    <span className="text-foreground truncate">{p.name}</span>
-                    <span className="text-[9px] text-muted-foreground ml-auto">{p.role ? p.role.replace(/_/g, ' ') : '—'}</span>
+                    <span className="text-foreground truncate flex-1">{p.name}</span>
+                    <span className="text-[9px] text-muted-foreground">{p.role ? p.role.replace(/_/g, ' ') : '—'}</span>
+                    <button
+                      onClick={() => navigate('/cultes')}
+                      className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors flex-shrink-0">
+                      + Assigner
+                    </button>
                   </div>
                 ))}
               </div>

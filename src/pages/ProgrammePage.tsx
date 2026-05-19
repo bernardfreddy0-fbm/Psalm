@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { getPlanning, getSongs, getMembers } from '@/lib/api';
+import { getPlanning, getSongs, getMembers, saveProgram, loadPrograms } from '@/lib/api';
 import { BIBLE_BOOKS, formatReference } from '@/lib/bible';
 import {
   Music, Plus, X, ChevronUp, ChevronDown, Search, Save, RefreshCw,
@@ -59,13 +59,26 @@ const ELEMENT_META: Record<ElementType, { icon: React.ReactNode; label: string; 
 
 const KEYS = ['Tous', 'Ré', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do'];
 
+const DRAFT_KEY = 'aef_programme_draft';
+
+const loadDraft = (): ProgramData => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) return JSON.parse(raw) as ProgramData;
+  } catch { /* ignore */ }
+  return emptyProgram();
+};
+
 /* ─── Main Component ─── */
 export default function ProgrammePage() {
   const [step, setStep] = useState(1);
   const [songs, setSongs] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [program, setProgram] = useState<ProgramData>(emptyProgram());
+  const [saving, setSaving] = useState(false);
+  const [program, setProgram] = useState<ProgramData>(loadDraft);
+  const [hasDraft, setHasDraft] = useState(() => !!localStorage.getItem(DRAFT_KEY));
+  const [savedDates, setSavedDates] = useState<string[]>([]);
   const [previewTab, setPreviewTab] = useState<'congregation' | 'equipe' | 'conducteur'>('congregation');
 
   useEffect(() => {
@@ -75,14 +88,46 @@ export default function ProgrammePage() {
       getSongs().catch(() => []),
       getMembers().catch(() => []),
       getPlanning(year).catch(() => []),
-    ]).then(([so, m, su]) => {
+      loadPrograms().catch(() => []),
+    ]).then(([so, m, su, progs]) => {
       setSongs(so);
       setMembers(m);
+      setSavedDates((progs as any[]).map((p: any) => p.key_name));
       const today = new Date().toISOString().split('T')[0];
       const next = su.filter((s: any) => s.date >= today).sort((a: any, b: any) => a.date.localeCompare(b.date))[0];
-      if (next) setProgram(p => ({ ...p, date: next.date, conducteur: next.dirigeant || '' }));
+      // Try to load saved programme for next sunday
+      if (next) {
+        const saved = (progs as any[]).find((p: any) => p.key_name === next.date);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved.value);
+            setProgram(parsed);
+            localStorage.setItem(DRAFT_KEY, saved.value);
+            setHasDraft(true);
+          } catch {
+            setProgram(p => ({ ...p, date: next.date, conducteur: next.dirigeant || '' }));
+          }
+        } else {
+          setProgram(p => ({ ...p, date: next.date, conducteur: next.dirigeant || '' }));
+        }
+      }
     }).finally(() => setLoading(false));
   }, []);
+
+  // Sauvegarde automatique dans localStorage (debounce 500ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(program));
+      setHasDraft(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [program]);
+
+  const clearDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setHasDraft(false);
+    setProgram(emptyProgram());
+  };
 
   const formatDateLong = (d: string) => {
     try { return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
@@ -105,7 +150,24 @@ export default function ProgrammePage() {
     setProgram(p => ({ ...p, elements: els }));
   };
 
-  const handleSave = () => toast.success('Programme sauvegardé (brouillon local)');
+  const handleSave = async () => {
+    if (!program.date) { toast.error('Sélectionnez une date avant de sauvegarder'); return; }
+    setSaving(true);
+    try {
+      await saveProgram(program.date, program);
+      setSavedDates(prev => prev.includes(program.date) ? prev : [...prev, program.date]);
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(program));
+      setHasDraft(true);
+      toast.success('Programme sauvegardé');
+    } catch {
+      // Fallback: save locally only
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(program));
+      setHasDraft(true);
+      toast.success('Programme sauvegardé localement');
+    } finally {
+      setSaving(false);
+    }
+  };
   const handlePrint = () => { toast.info('Utilisez Ctrl+P / Cmd+P'); window.print(); };
 
   if (loading) {
@@ -132,9 +194,22 @@ export default function ProgrammePage() {
           <p className="text-xs text-muted-foreground">
             {program.date ? `Programme · ${formatDateLong(program.date)}` : 'Nouveau programme'}
           </p>
+          {hasDraft && (program.elements.length > 0 || program.titre) && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                💾 Brouillon sauvegardé
+              </span>
+              <button
+                onClick={clearDraft}
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-0.5"
+              >
+                ✕ Effacer
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleSave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors">
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50">
             <Save className="w-3.5 h-3.5" /> Brouillon
           </button>
           <button onClick={() => setStep(3)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
