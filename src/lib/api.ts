@@ -38,7 +38,7 @@ export async function login(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw new Error(error.message);
 
-  const { data: profile } = await supabase
+  const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('id, first_name, last_name, email, role, phone')
     .eq('id', data.user.id)
@@ -51,7 +51,7 @@ export async function checkAuth() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, email, role, phone')
       .eq('id', session.user.id)
@@ -122,7 +122,7 @@ export const resetMemberPassword = async (userId: string, newPassword: string) =
 // ── Planning / Sundays ───────────────────────────────────────────────────────
 
 export const getPlanning = async (year: number) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('sundays')
     .select(`
       id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, pastor_note,
@@ -146,7 +146,7 @@ export const getPlanning = async (year: number) => {
 };
 
 export const createSunday = async (date: string, label: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('sundays')
     .insert({ date, label, updated_at: new Date().toISOString() })
     .select('id')
@@ -156,7 +156,7 @@ export const createSunday = async (date: string, label: string) => {
 };
 
 export const updateSunday = async (id: string, data: Record<string, any>) => {
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('sundays')
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq('id', Number(id));
@@ -188,7 +188,7 @@ export interface AdminSong {
 }
 
 export const getSongs = async (): Promise<AdminSong[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('songs')
     .select('id, title, author, key_note, tempo, tags, youtube_url, lyrics, partition_url, audio_url, folder')
     .order('title');
@@ -247,7 +247,7 @@ export const deletePartition = async (songId: string) => {
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 export const getPermissions = async (): Promise<{ permissions: Record<string, string[]> }> => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('permissions')
     .select('permission_key, roles')
     .eq('active', true);
@@ -269,7 +269,7 @@ export async function savePermissions(matrix: Record<string, string[]>) {
     updated_at: new Date().toISOString(),
   }));
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('permissions')
     .upsert(rows, { onConflict: 'permission_key' });
   if (error) throw new Error(error.message);
@@ -336,7 +336,7 @@ export const deleteSpecialEvent = async (id: string) => {
 // ── Config / Settings ─────────────────────────────────────────────────────────
 
 export async function getSettingsByCategory(category: string): Promise<any[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('config')
     .select('key, value')
     .like('key', `${category}_%`);
@@ -437,7 +437,7 @@ export interface RunsheetData {
 }
 
 export async function getRunsheet(sundayId: string): Promise<RunsheetData> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('sunday_runsheet')
     .select('*')
     .eq('sunday_id', Number(sundayId))
