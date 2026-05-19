@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Church, Users, Repeat,
-  Music, LogOut, Menu, X, Settings, Shield, Key, UserCog
+  Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -40,6 +40,7 @@ const navSections = [
     items: [
       { to: '/comptes', icon: UserCog, label: 'Comptes' },
       { to: '/permissions', icon: Key, label: 'Permissions' },
+      { to: '/journal', icon: ScrollText, label: 'Journal' },
       { to: '/configuration', icon: Settings, label: 'Configuration' },
     ],
   },
@@ -56,6 +57,7 @@ const pageTitles: Record<string, string> = {
   '/rotations': 'Rotations & Participation',
   '/comptes': 'Gestion des comptes',
   '/permissions': 'Permissions',
+  '/journal': 'Journal d\'activité',
   '/configuration': 'Configuration',
   '/admin': 'Administration',
 };

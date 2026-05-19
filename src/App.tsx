@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,10 +15,25 @@ import MembresPage from "@/pages/MembresPage";
 import ChantsPage from "@/pages/ChantsPage";
 import ComptesPage from "@/pages/ComptesPage";
 import PermissionsPage from "@/pages/PermissionsPage";
+import JournalPage from "@/pages/JournalPage";
 import ConfigurationPage from "@/pages/ConfigurationPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
+
+function Guard({ action, children }: { action: string; children: React.ReactNode }) {
+  const { hasPermission } = useAuth();
+  if (!hasPermission(action)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-muted-foreground">
+        <span className="text-4xl">🔒</span>
+        <p className="text-sm font-medium">Accès refusé</p>
+        <p className="text-xs">Vous n'avez pas la permission d'accéder à cette section.</p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -31,13 +46,14 @@ function AppRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/programme" element={<ProgrammePage />} />
         <Route path="/evenements" element={<EvenementsPage />} />
-        <Route path="/cultes" element={<PlanningPage />} />
-        <Route path="/membres" element={<MembresPage />} />
-        <Route path="/rotations" element={<RotationsPage />} />
-        <Route path="/chants" element={<ChantsPage />} />
-        <Route path="/comptes" element={<ComptesPage />} />
-        <Route path="/permissions" element={<PermissionsPage />} />
-        <Route path="/configuration" element={<ConfigurationPage />} />
+        <Route path="/cultes" element={<Guard action="planning_view"><PlanningPage /></Guard>} />
+        <Route path="/membres" element={<Guard action="members_view"><MembresPage /></Guard>} />
+        <Route path="/rotations" element={<Guard action="planning_edit"><RotationsPage /></Guard>} />
+        <Route path="/chants" element={<Guard action="songs_view"><ChantsPage /></Guard>} />
+        <Route path="/comptes" element={<Guard action="members_manage"><ComptesPage /></Guard>} />
+        <Route path="/permissions" element={<Guard action="config_edit"><PermissionsPage /></Guard>} />
+        <Route path="/journal" element={<Guard action="config_edit"><JournalPage /></Guard>} />
+        <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -50,7 +66,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter basename="/admin">
+        <BrowserRouter basename="/">
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>

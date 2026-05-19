@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getMembers, updateMember, createMember, deleteMember } from '@/lib/api';
-import { Search, Shield, Key, X, Check, Plus, Trash2 } from 'lucide-react';
+import { getMembers, updateMember, createMember, deleteMember, resetMemberPassword } from '@/lib/api';
+import { Search, Shield, Key, X, Check, Plus, Trash2, Copy, Eye, EyeOff, UserCheck, UserX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -57,6 +57,12 @@ type AccountUser = {
 };
 
 type EditUser = { id: string; email: string; roles: string[] } | null;
+type ResetModal = { id: string; name: string; newPassword: string } | null;
+
+function generatePassword(length = 10): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
 
 export default function ComptesPage() {
   const [users, setUsers] = useState<AccountUser[]>([]);
@@ -65,6 +71,9 @@ export default function ComptesPage() {
   const [editing, setEditing] = useState<EditUser>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ first_name: '', last_name: '', email: '', role: 'choriste' });
+  const [resetModal, setResetModal] = useState<ResetModal>(null);
+  const [resetConfirming, setResetConfirming] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -111,14 +120,43 @@ export default function ComptesPage() {
     if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
 
     try {
-      console.log('[ComptesPage] Deleting member id:', id, 'name:', name);
-      const result = await deleteMember(String(id));
-      console.log('[ComptesPage] Delete result:', result);
+      await deleteMember(String(id));
       setUsers(prev => prev.filter(user => String(user.id) !== String(id)));
       toast.success('Compte supprimé');
     } catch (err: any) {
-      console.error('[ComptesPage] Delete error:', err, err?.message);
       toast.error(`Erreur lors de la suppression: ${err?.message || 'inconnue'}`);
+    }
+  };
+
+  const openResetModal = (id: string | number, name: string) => {
+    setShowPassword(false);
+    setResetConfirming(false);
+    setResetModal({ id: String(id), name, newPassword: generatePassword() });
+  };
+
+  const handleConfirmReset = async () => {
+    if (!resetModal) return;
+    setResetConfirming(true);
+    try {
+      await resetMemberPassword(resetModal.id, resetModal.newPassword);
+      toast.success(`Mot de passe réinitialisé pour ${resetModal.name}`);
+      setResetModal(null);
+    } catch (err: any) {
+      toast.error(`Erreur : ${err?.message || 'inconnue'}`);
+    } finally {
+      setResetConfirming(false);
+    }
+  };
+
+  const handleToggleActive = async (id: string | number, name: string, currentActive: boolean) => {
+    const action = currentActive ? 'désactiver' : 'réactiver';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} le compte de ${name} ?`)) return;
+    try {
+      await updateMember(String(id), { is_active: !currentActive });
+      toast.success(`Compte ${currentActive ? 'désactivé' : 'réactivé'}`);
+      load();
+    } catch (err: any) {
+      toast.error(`Erreur : ${err?.message || 'inconnue'}`);
     }
   };
 
@@ -226,6 +264,87 @@ export default function ComptesPage() {
         )}
       </AnimatePresence>
 
+      {/* ── Reset password modal ── */}
+      <AnimatePresence>
+        {resetModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-foreground/40 z-50 flex items-center justify-center p-4"
+            onClick={() => !resetConfirming && setResetModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 8 }} animate={{ scale: 1, y: 0 }}
+              className="bg-card rounded-xl border border-border p-6 w-full max-w-sm shadow-xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Key className="w-4 h-4 text-warning" /> Réinitialiser le mot de passe
+                </h3>
+                <button onClick={() => setResetModal(null)} disabled={resetConfirming}>
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Un nouveau mot de passe sera attribué à <strong>{resetModal.name}</strong>.
+                Notez-le avant de confirmer — il ne sera plus visible ensuite.
+              </p>
+
+              {/* Password display */}
+              <div className="mb-4">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                  Nouveau mot de passe généré
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 border-warning/40 bg-warning/5 font-mono text-sm">
+                    <span className="flex-1 select-all tracking-widest">
+                      {showPassword ? resetModal.newPassword : '••••••••••'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title={showPassword ? 'Masquer' : 'Afficher'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(resetModal.newPassword);
+                      toast.success('Mot de passe copié !');
+                    }}
+                    className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Copier"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleConfirmReset}
+                  disabled={resetConfirming}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-warning text-warning-foreground text-sm font-semibold disabled:opacity-50 hover:bg-warning/90 transition-colors"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  {resetConfirming ? 'Réinitialisation...' : 'Confirmer la réinitialisation'}
+                </button>
+                <button
+                  onClick={() => setResetModal(null)}
+                  disabled={resetConfirming}
+                  className="px-4 py-2.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Annuler
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {loading ? <p className="text-sm text-muted-foreground">Chargement...</p> : (
         <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="grid grid-cols-12 px-4 py-3 border-b border-border text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
@@ -249,13 +368,24 @@ export default function ComptesPage() {
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </div>
-                <div className="col-span-3 flex gap-1 justify-end">
+                <div className="col-span-3 flex gap-1 justify-end flex-wrap">
                   <button onClick={() => setEditing({ id: String(u.id), email: u.email, roles: roles.length > 0 ? roles : ['choriste'] })}
                     className="flex items-center gap-1 px-2 py-1 rounded text-xs text-accent hover:bg-accent/10">
                     <Shield className="w-3 h-3" /> Rôles
                   </button>
-                  <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-warning hover:bg-warning/10">
+                  <button onClick={() => openResetModal(u.id, `${u.first_name} ${u.last_name}`)}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-warning hover:bg-warning/10">
                     <Key className="w-3 h-3" /> Reset MDP
+                  </button>
+                  <button
+                    onClick={() => handleToggleActive(u.id, `${u.first_name} ${u.last_name}`, String(u.is_active ?? 1) !== '0')}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted"
+                    title={String(u.is_active ?? 1) !== '0' ? 'Désactiver le compte' : 'Réactiver le compte'}
+                  >
+                    {String(u.is_active ?? 1) !== '0'
+                      ? <><UserX className="w-3 h-3" /> Désactiver</>
+                      : <><UserCheck className="w-3 h-3" /> Activer</>
+                    }
                   </button>
                   <button onClick={() => handleDelete(u.id, `${u.first_name} ${u.last_name}`)}
                     className="flex items-center gap-1 px-2 py-1 rounded text-xs text-destructive hover:bg-destructive/10">
