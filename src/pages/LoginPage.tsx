@@ -68,8 +68,8 @@ export default function LoginPage() {
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%)' }} />
 
       {/* Large background cross */}
-      <div className="absolute right-0 top-0 h-full pointer-events-none select-none" style={{ opacity: 0.04 }}>
-        <svg height="100%" viewBox="0 0 200 200" fill="none">
+      <div className="absolute right-8 bottom-8 w-32 h-32 pointer-events-none select-none" style={{ opacity: 0.05 }}>
+        <svg width="100%" height="100%" viewBox="0 0 200 200" fill="none">
           <rect x="80" y="0" width="40" height="200" fill="white" />
           <rect x="0" y="80" width="200" height="40" fill="white" />
         </svg>
