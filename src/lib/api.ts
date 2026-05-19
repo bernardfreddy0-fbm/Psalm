@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, supabaseAdmin } from './supabase';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -95,13 +95,13 @@ export const createMember = async (data: { first_name: string; last_name: string
 export const updateMember = async (id: string, data: Record<string, any>) => {
   const payload: any = { ...data, updated_at: new Date().toISOString() };
   if (data.is_active !== undefined) payload.is_active = data.is_active !== '0' && data.is_active !== false;
-  const { error } = await supabase.from('profiles').update(payload).eq('id', id);
+  const { error } = await supabaseAdmin.from('profiles').update(payload).eq('id', id);
   if (error) throw new Error(error.message);
   return { success: true };
 };
 
 export const deleteMember = async (id: string) => {
-  const { error } = await supabase.from('profiles').update({ is_active: false }).eq('id', id);
+  const { error } = await supabaseAdmin.from('profiles').update({ is_active: false }).eq('id', id);
   if (error) throw new Error(error.message);
 };
 
@@ -165,7 +165,7 @@ export const updateSunday = async (id: string, data: Record<string, any>) => {
 };
 
 export const deleteSunday = async (id: string) => {
-  const { error } = await supabase.from('sundays').delete().eq('id', Number(id));
+  const { error } = await supabaseAdmin.from('sundays').delete().eq('id', Number(id));
   if (error) throw new Error(error.message);
 };
 
@@ -202,12 +202,12 @@ export const getSongs = async (): Promise<AdminSong[]> => {
 };
 
 export const getSongFolders = async (): Promise<string[]> => {
-  const { data } = await supabase.from('songs').select('folder').not('folder', 'is', null);
+  const { data } = await supabaseAdmin.from('songs').select('folder').not('folder', 'is', null);
   return [...new Set((data || []).map((s: any) => s.folder).filter(Boolean))];
 };
 
 export const createSong = async (data: { title: string; author?: string; key?: string; tempo?: string; tags?: string }) => {
-  const { error } = await supabase.from('songs').insert({
+  const { error } = await supabaseAdmin.from('songs').insert({
     title: data.title,
     author: data.author || null,
     key_note: data.key || null,
@@ -221,26 +221,26 @@ export const updateSong = async (id: string, data: Record<string, any>) => {
   const payload: any = { ...data };
   if (data.key !== undefined) { payload.key_note = data.key; delete payload.key; }
   if (data.link !== undefined) { payload.youtube_url = data.link; delete payload.link; }
-  const { error } = await supabase.from('songs').update(payload).eq('id', Number(id));
+  const { error } = await supabaseAdmin.from('songs').update(payload).eq('id', Number(id));
   if (error) throw new Error(error.message);
 };
 
 export const deleteSong = async (id: string) => {
-  const { error } = await supabase.from('songs').delete().eq('id', Number(id));
+  const { error } = await supabaseAdmin.from('songs').delete().eq('id', Number(id));
   if (error) throw new Error(error.message);
 };
 
 export const uploadPartition = async (songId: string, file: File): Promise<{ partition_url: string }> => {
   const path = `partitions/${songId}/${file.name}`;
-  const { error } = await supabase.storage.from('songs').upload(path, file, { upsert: true });
+  const { error } = await supabaseAdmin.storage.from('songs').upload(path, file, { upsert: true });
   if (error) throw new Error(error.message);
-  const { data: url } = supabase.storage.from('songs').getPublicUrl(path);
-  await supabase.from('songs').update({ partition_url: url.publicUrl }).eq('id', Number(songId));
+  const { data: url } = supabaseAdmin.storage.from('songs').getPublicUrl(path);
+  await supabaseAdmin.from('songs').update({ partition_url: url.publicUrl }).eq('id', Number(songId));
   return { partition_url: url.publicUrl };
 };
 
 export const deletePartition = async (songId: string) => {
-  const { error } = await supabase.from('songs').update({ partition_url: null }).eq('id', Number(songId));
+  const { error } = await supabaseAdmin.from('songs').update({ partition_url: null }).eq('id', Number(songId));
   if (error) throw new Error(error.message);
 };
 
@@ -289,7 +289,7 @@ export interface SpecialEvent {
 }
 
 export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
-  const { data, error } = await supabase.from('events').select('*').order('date');
+  const { data, error } = await supabaseAdmin.from('events').select('*').order('date');
   throwIfError(data, error);
   return (data || []).map((e: any) => ({
     id: String(e.id),
@@ -303,7 +303,7 @@ export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
 };
 
 export async function createSpecialEvent(data: Omit<SpecialEvent, 'id'>) {
-  const { error } = await supabase.from('events').insert({
+  const { error } = await supabaseAdmin.from('events').insert({
     title: data.title,
     date: data.date_start,
     end_date: data.date_end || null,
@@ -316,7 +316,7 @@ export async function createSpecialEvent(data: Omit<SpecialEvent, 'id'>) {
 }
 
 export async function updateSpecialEvent(id: string, data: Partial<SpecialEvent>) {
-  const { error } = await supabase.from('events').update({
+  const { error } = await supabaseAdmin.from('events').update({
     title: data.title,
     date: data.date_start,
     end_date: data.date_end || null,
@@ -329,7 +329,7 @@ export async function updateSpecialEvent(id: string, data: Partial<SpecialEvent>
 }
 
 export const deleteSpecialEvent = async (id: string) => {
-  const { error } = await supabase.from('events').delete().eq('id', Number(id));
+  const { error } = await supabaseAdmin.from('events').delete().eq('id', Number(id));
   if (error) throw new Error(error.message);
 };
 
@@ -345,7 +345,7 @@ export async function getSettingsByCategory(category: string): Promise<any[]> {
 }
 
 export async function getAllSettings(): Promise<Record<string, any[]>> {
-  const { data } = await supabase.from('config').select('key, value');
+  const { data } = await supabaseAdmin.from('config').select('key, value');
   const result: Record<string, any[]> = {};
   for (const row of data || []) {
     const [cat, ...rest] = row.key.split('_');
@@ -357,7 +357,7 @@ export async function getAllSettings(): Promise<Record<string, any[]>> {
 
 export async function saveSetting(category: string, key: string, value: any) {
   const fullKey = `${category}_${key}`;
-  const { error } = await supabase.from('config').upsert(
+  const { error } = await supabaseAdmin.from('config').upsert(
     { key: fullKey, value: typeof value === 'string' ? value : JSON.stringify(value), updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
@@ -371,29 +371,29 @@ export async function saveSettingsBulk(settings: { category: string; key: string
     value: typeof s.value === 'string' ? s.value : JSON.stringify(s.value),
     updated_at: new Date().toISOString(),
   }));
-  const { error } = await supabase.from('config').upsert(rows, { onConflict: 'key' });
+  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
   if (error) throw new Error(error.message);
   return { success: true };
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  const { data, error } = await supabase.from('config').select('key, value');
+  const { data, error } = await supabaseAdmin.from('config').select('key, value');
   throwIfError(data, error);
   return Object.fromEntries((data || []).map(r => [r.key, r.value]));
 }
 
 export async function saveSettings(settings: { key: string; value: string }[]) {
   const rows = settings.map(s => ({ key: s.key, value: s.value, updated_at: new Date().toISOString() }));
-  const { error } = await supabase.from('config').upsert(rows, { onConflict: 'key' });
+  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
   if (error) throw new Error(error.message);
   return { success: true };
 }
 
 export async function getSystemStats() {
   const [members, songs, sundays] = await Promise.all([
-    supabase.from('profiles').select('id', { count: 'exact', head: true }),
-    supabase.from('songs').select('id', { count: 'exact', head: true }),
-    supabase.from('sundays').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
   ]);
   return { members: members.count, songs: songs.count, sundays: sundays.count };
 }
@@ -404,7 +404,7 @@ export function getBackupUrl(): string { return ''; }
 // ── Programme du culte ────────────────────────────────────────────────────────
 
 export async function saveProgram(date: string, data: object) {
-  const { error } = await supabase.from('config').upsert(
+  const { error } = await supabaseAdmin.from('config').upsert(
     { key: `programme_${date}`, value: JSON.stringify(data), updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
@@ -413,7 +413,7 @@ export async function saveProgram(date: string, data: object) {
 }
 
 export async function loadPrograms(): Promise<Array<{ key_name: string; value: string }>> {
-  const { data } = await supabase.from('config').select('key, value').like('key', 'programme_%');
+  const { data } = await supabaseAdmin.from('config').select('key, value').like('key', 'programme_%');
   return (data || []).map(r => ({ key_name: r.key.replace('programme_', ''), value: r.value }));
 }
 
@@ -443,7 +443,7 @@ export async function getRunsheet(sundayId: string): Promise<RunsheetData> {
     .eq('sunday_id', Number(sundayId))
     .order('position');
   throwIfError(data, error);
-  const { data: sunday } = await supabase.from('sundays').select('start_time').eq('id', Number(sundayId)).single();
+  const { data: sunday } = await supabaseAdmin.from('sundays').select('start_time').eq('id', Number(sundayId)).single();
   return {
     items: (data || []).map((r: any) => ({ ...r, id: String(r.id), song_id: r.song_id ? String(r.song_id) : null })),
     start_time: sunday?.start_time || '10:00',
@@ -451,9 +451,9 @@ export async function getRunsheet(sundayId: string): Promise<RunsheetData> {
 }
 
 export async function saveRunsheet(sundayId: string, items: RunsheetItem[]): Promise<void> {
-  await supabase.from('sunday_runsheet').delete().eq('sunday_id', Number(sundayId));
+  await supabaseAdmin.from('sunday_runsheet').delete().eq('sunday_id', Number(sundayId));
   if (items.length === 0) return;
-  const { error } = await supabase.from('sunday_runsheet').insert(
+  const { error } = await supabaseAdmin.from('sunday_runsheet').insert(
     items.map((item, i) => ({
       sunday_id: Number(sundayId),
       position: item.position ?? i,
@@ -469,12 +469,12 @@ export async function saveRunsheet(sundayId: string, items: RunsheetItem[]): Pro
 }
 
 export async function publishRunsheet(sundayId: string, published: boolean): Promise<void> {
-  const { error } = await supabase.from('sunday_runsheet').update({ is_published: published }).eq('sunday_id', Number(sundayId));
+  const { error } = await supabaseAdmin.from('sunday_runsheet').update({ is_published: published }).eq('sunday_id', Number(sundayId));
   if (error) throw new Error(error.message);
 }
 
 export async function updateRunsheetStartTime(sundayId: string, startTime: string): Promise<void> {
-  const { error } = await supabase.from('sundays').update({ start_time: startTime }).eq('id', Number(sundayId));
+  const { error } = await supabaseAdmin.from('sundays').update({ start_time: startTime }).eq('id', Number(sundayId));
   if (error) throw new Error(error.message);
 }
 
@@ -639,10 +639,10 @@ export async function getActivitySummary(days = 7): Promise<Record<string, numbe
   const cutoffStr = cutoff.toISOString();
 
   const [absences, dispos, members, songs] = await Promise.allSettled([
-    supabase.from('absences').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabase.from('disponibilites').select('id', { count: 'exact', head: true }).gte('updated_at', cutoffStr),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabase.from('songs').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
+    supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
+    supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }).gte('updated_at', cutoffStr),
+    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
+    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
   ]);
 
   return {
