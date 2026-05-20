@@ -72,7 +72,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter basename="/">
+        <BrowserRouter basename="/admin">
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>

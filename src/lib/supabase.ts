@@ -9,5 +9,5 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Client admin pour toutes les opérations DB du back office (bypass RLS)
 export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { persistSession: false },
+  auth: { persistSession: false, storageKey: 'sb-admin-bypass' },
 });

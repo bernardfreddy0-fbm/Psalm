@@ -69,7 +69,7 @@ export async function logout() {
 // ── Members ───────────────────────────────────────────────────────────────────
 
 export const getMembers = () =>
-  supabase
+  supabaseAdmin
     .from('profiles')
     .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color')
     .order('last_name')
@@ -79,17 +79,29 @@ export const getMembers = () =>
     });
 
 export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string }) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Non connecté');
-
-  const res = await fetch('/api/create-member', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-    body: JSON.stringify(data),
+  // Create auth user via Supabase Admin SDK
+  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+    email: data.email,
+    password: Math.random().toString(36).slice(-12) + 'Aa1!', // temporary password
+    email_confirm: true,
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Erreur création membre');
-  return json.data;
+  if (authErr) throw new Error(authErr.message);
+  const userId = authData.user.id;
+
+  // Create profile row
+  const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
+    id: userId,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    email: data.email,
+    role: data.role,
+    phone: data.phone || null,
+    instrument: data.instrument || null,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  });
+  if (profileErr) throw new Error(profileErr.message);
+  return { id: userId };
 };
 
 export const updateMember = async (id: string, data: Record<string, any>) => {
@@ -106,17 +118,9 @@ export const deleteMember = async (id: string) => {
 };
 
 export const resetMemberPassword = async (userId: string, newPassword: string) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Non connecté');
-
-  const res = await fetch('/api/reset-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-    body: JSON.stringify({ user_id: userId, new_password: newPassword }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Erreur reset mot de passe');
-  return json;
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) throw new Error(error.message);
+  return { success: true };
 };
 
 // ── Planning / Sundays ───────────────────────────────────────────────────────
@@ -502,35 +506,35 @@ export async function getActivityLogs(params?: {
   const logs: ActivityLog[] = [];
 
   const [absencesRes, disposRes, profilesRes, sundaysRes, songsRes] = await Promise.allSettled([
-    supabase
+    supabaseAdmin
       .from('absences')
       .select('id, user_id, sunday_date, created_at, profiles(first_name, last_name)')
       .gte('created_at', cutoffStr)
       .order('created_at', { ascending: false })
       .limit(40),
 
-    supabase
+    supabaseAdmin
       .from('disponibilites')
       .select('id, user_id, date, status, updated_at, profiles(first_name, last_name)')
       .gte('updated_at', cutoffStr)
       .order('updated_at', { ascending: false })
       .limit(40),
 
-    supabase
+    supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, role, created_at')
       .gte('created_at', cutoffStr)
       .order('created_at', { ascending: false })
       .limit(20),
 
-    supabase
+    supabaseAdmin
       .from('sundays')
       .select('id, date, label, updated_at')
       .gte('updated_at', cutoffStr)
       .order('updated_at', { ascending: false })
       .limit(20),
 
-    supabase
+    supabaseAdmin
       .from('songs')
       .select('id, title, author, created_at')
       .gte('created_at', cutoffStr)
