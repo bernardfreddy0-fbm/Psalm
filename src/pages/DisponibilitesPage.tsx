@@ -96,7 +96,7 @@ function AbsencesTable({ absences, onDelete }: { absences: AdminAbsence[]; onDel
     const q = search.toLowerCase();
     return absences.filter(a =>
       `${a.first_name} ${a.last_name}`.toLowerCase().includes(q) ||
-      a.sunday_date.includes(q)
+      a.date_start.includes(q)
     );
   }, [absences, search]);
 
@@ -121,7 +121,7 @@ function AbsencesTable({ absences, onDelete }: { absences: AdminAbsence[]; onDel
                 <span className="text-[10px] text-muted-foreground ml-2 bg-muted px-1.5 py-0.5 rounded">{roleBadge(a.role)}</span>
                 {a.reason && <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.reason}</p>}
               </div>
-              <span className="text-xs text-muted-foreground shrink-0">{formatDate(a.sunday_date)}</span>
+              <span className="text-xs text-muted-foreground shrink-0">{formatDate(a.date_start)}</span>
               <button
                 onClick={() => onDelete(a.id)}
                 className="p-1 rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
@@ -182,7 +182,7 @@ export default function DisponibilitesPage() {
           { label: 'Dimanches à venir', value: upcomingDispos.length, icon: Calendar, color: 'text-primary' },
           { label: 'Réponses reçues', value: totalResponded, icon: CheckCircle, color: 'text-emerald-500' },
           { label: 'Disponibles', value: totalAvailable, icon: Users, color: 'text-blue-400' },
-          { label: 'Absences déclarées', value: absences.filter(a => a.sunday_date >= new Date().toISOString().split('T')[0]).length, icon: CalendarOff, color: 'text-red-400' },
+          { label: 'Absences déclarées', value: absences.filter(a => a.date_start >= new Date().toISOString().split('T')[0]).length, icon: CalendarOff, color: 'text-red-400' },
         ].map(kpi => (
           <div key={kpi.label} className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
             <kpi.icon className={`w-5 h-5 ${kpi.color} shrink-0`} />

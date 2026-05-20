@@ -575,16 +575,16 @@ export async function getActivityLogs(params?: {
   const [absencesRes, disposRes, profilesRes, sundaysRes, songsRes] = await Promise.allSettled([
     supabaseAdmin
       .from('absences')
-      .select('id, user_id, sunday_date, created_at, profiles(first_name, last_name)')
+      .select('id, user_id, date_start, created_at, profiles(first_name, last_name)')
       .gte('created_at', cutoffStr)
       .order('created_at', { ascending: false })
       .limit(40),
 
     supabaseAdmin
       .from('disponibilites')
-      .select('id, user_id, date, status, updated_at, profiles(first_name, last_name)')
-      .gte('updated_at', cutoffStr)
-      .order('updated_at', { ascending: false })
+      .select('id, user_id, sunday_id, available, responded_at, profiles(first_name, last_name)')
+      .gte('responded_at', cutoffStr)
+      .order('responded_at', { ascending: false })
       .limit(40),
 
     supabaseAdmin
@@ -613,8 +613,8 @@ export async function getActivityLogs(params?: {
     for (const a of absencesRes.value.data) {
       const profile = a.profiles as any;
       const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
-      const dateStr = a.sunday_date
-        ? new Date(a.sunday_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      const dateStr = a.date_start
+        ? new Date(a.date_start + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
         : undefined;
       logs.push({
         id: `abs_${a.id}`,
@@ -632,20 +632,15 @@ export async function getActivityLogs(params?: {
     for (const d of disposRes.value.data) {
       const profile = d.profiles as any;
       const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
-      const statusLabel =
-        d.status === 'available' ? 'disponible' :
-        d.status === 'unavailable' ? 'indisponible' : 'incertain';
-      const dateStr = d.date
-        ? new Date(d.date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-        : undefined;
+      const statusLabel = d.available ? 'disponible' : 'indisponible';
       logs.push({
         id: `dispo_${d.id}`,
         type: 'dispo',
         action: 'dispo_updated',
         description: `${name} s'est marqué ${statusLabel}`,
         user_name: name,
-        detail: dateStr,
-        created_at: d.updated_at,
+        detail: undefined,
+        created_at: d.responded_at,
       });
     }
   }
@@ -711,7 +706,7 @@ export async function getActivitySummary(days = 7): Promise<Record<string, numbe
 
   const [absences, dispos, members, songs] = await Promise.allSettled([
     supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }).gte('updated_at', cutoffStr),
+    supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }).gte('responded_at', cutoffStr),
     supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
     supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
   ]);
@@ -828,7 +823,8 @@ export interface AdminAbsence {
   first_name: string;
   last_name: string;
   role: string;
-  sunday_date: string;
+  date_start: string;
+  date_end: string | null;
   reason: string | null;
   created_at: string;
 }
@@ -837,10 +833,10 @@ export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
   const y = year ?? new Date().getFullYear();
   const { data, error } = await supabaseAdmin
     .from('absences')
-    .select('id, user_id, sunday_date, reason, created_at, profiles(first_name, last_name, role)')
-    .gte('sunday_date', `${y}-01-01`)
-    .lte('sunday_date', `${y}-12-31`)
-    .order('sunday_date', { ascending: false });
+    .select('id, user_id, date_start, date_end, reason, created_at, profiles(first_name, last_name, role)')
+    .gte('date_start', `${y}-01-01`)
+    .lte('date_start', `${y}-12-31`)
+    .order('date_start', { ascending: false });
   if (error) throw new Error(error.message);
   return (data || []).map((a: any) => ({
     id: String(a.id),
@@ -848,7 +844,8 @@ export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
     first_name: a.profiles?.first_name || '',
     last_name: a.profiles?.last_name || '',
     role: a.profiles?.role || '',
-    sunday_date: a.sunday_date,
+    date_start: a.date_start,
+    date_end: a.date_end || null,
     reason: a.reason || null,
     created_at: a.created_at,
   }));
