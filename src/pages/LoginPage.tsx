@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import {
+  isLockedOut, getLockoutRemainingSeconds, getRemainingAttempts,
+  recordFailedAttempt, resetRateLimit, isValidEmail,
+} from '@/lib/security';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,15 +18,56 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [lockedOut, setLockedOut] = useState(isLockedOut());
+  const [lockoutSeconds, setLockoutSeconds] = useState(getLockoutRemainingSeconds());
+  const [remainingAttempts, setRemainingAttempts] = useState(getRemainingAttempts());
+
+  // Décompte du lockout en temps réel
+  useEffect(() => {
+    if (!lockedOut) return;
+    const interval = setInterval(() => {
+      const remaining = getLockoutRemainingSeconds();
+      setLockoutSeconds(remaining);
+      if (remaining <= 0) {
+        setLockedOut(false);
+        setError('');
+        setRemainingAttempts(5);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockedOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Vérification lockout
+    if (isLockedOut()) {
+      setLockedOut(true);
+      setLockoutSeconds(getLockoutRemainingSeconds());
+      return;
+    }
+
+    // Validation email basique
+    if (!isValidEmail(email)) {
+      setError('Format d\'email invalide.');
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
       await login(email, password);
+      resetRateLimit(); // succès → reset le compteur
     } catch (err: any) {
-      setError(err.message || 'Identifiants incorrects');
+      const state = recordFailedAttempt();
+      setRemainingAttempts(Math.max(0, 5 - state.count));
+      if (state.lockUntil) {
+        setLockedOut(true);
+        setLockoutSeconds(getLockoutRemainingSeconds());
+        setError('');
+      } else {
+        setError(err.message || 'Identifiants incorrects');
+      }
     } finally {
       setLoading(false);
     }
@@ -33,15 +78,21 @@ export default function LoginPage() {
       setError('Saisissez votre email puis cliquez sur "Mot de passe oublié ?"');
       return;
     }
+    if (!isValidEmail(email)) {
+      setError('Format d\'email invalide.');
+      return;
+    }
     setResetLoading(true);
     try {
+      // Toujours afficher "lien envoyé" même si l'email n'existe pas
+      // (prévention de l'énumération des comptes)
       await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       setResetSent(true);
       setError('');
     } catch {
-      setError('Erreur lors de l\'envoi du lien de réinitialisation');
+      setResetSent(true); // même message en cas d'erreur (sécurité)
     } finally {
       setResetLoading(false);
     }
@@ -216,30 +267,51 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Feedback */}
-          {error && (
+          {/* Blocage sécurité */}
+          {lockedOut && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-400 font-semibold">Accès temporairement bloqué</p>
+                <p className="text-red-300/70 mt-0.5">Trop de tentatives échouées. Réessayez dans <span className="font-mono font-bold text-red-300">{Math.floor(lockoutSeconds / 60)}:{String(lockoutSeconds % 60).padStart(2, '0')}</span></p>
+              </div>
+            </div>
+          )}
+
+          {/* Avertissement tentatives restantes */}
+          {!lockedOut && remainingAttempts <= 2 && remainingAttempts > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <p className="text-amber-400">
+                {remainingAttempts === 1 ? 'Dernière tentative avant blocage temporaire.' : `Plus que ${remainingAttempts} tentatives avant blocage.`}
+              </p>
+            </div>
+          )}
+
+          {/* Erreur */}
+          {error && !lockedOut && (
             <p className="text-xs text-red-400 px-1">{error}</p>
           )}
           {resetSent && (
-            <p className="text-xs text-emerald-400 px-1">✓ Lien de réinitialisation envoyé à {email}</p>
+            <p className="text-xs text-emerald-400 px-1">✓ Si un compte existe pour {email}, un lien de réinitialisation a été envoyé.</p>
           )}
 
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl text-sm font-semibold text-white mt-1 transition-all disabled:opacity-60"
+            disabled={loading || lockedOut}
+            className="w-full py-3 rounded-xl text-sm font-semibold text-white mt-1 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{
-              background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-              boxShadow: loading ? 'none' : '0 4px 20px rgba(37,99,235,0.4)',
+              background: lockedOut ? 'rgba(100,116,139,0.4)' : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+              boxShadow: (loading || lockedOut) ? 'none' : '0 4px 20px rgba(37,99,235,0.4)',
             }}
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Connexion...
+                Vérification...
               </span>
-            ) : 'Se connecter'}
+            ) : lockedOut ? '🔒 Accès bloqué' : 'Se connecter'}
           </button>
         </form>
 

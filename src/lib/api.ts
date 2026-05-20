@@ -129,6 +129,7 @@ export const createMember = async (data: { first_name: string; last_name: string
     updated_at: new Date().toISOString(),
   });
   if (profileErr) throw new Error(profileErr.message);
+  await logSecurityEvent('account_created', { target_email: data.email, role: data.role }).catch(() => {});
   return { id: userId };
 };
 
@@ -140,14 +141,51 @@ export const updateMember = async (id: string, data: Record<string, any>) => {
   return { success: true };
 };
 
+// ── Journal d'audit sécurité ──────────────────────────────────────────────────
+
+export async function logSecurityEvent(event: string, meta?: Record<string, any>) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const actor = session?.user?.email ?? 'system';
+    const key = `secaudit_${Date.now()}_${event}`;
+    await supabaseAdmin.from('config').insert({
+      key,
+      value: JSON.stringify({ event, actor, meta, ts: new Date().toISOString() }),
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    // Log silencieux — ne jamais bloquer l'action principale
+    console.warn('[SECURITY AUDIT]', event, meta);
+  }
+}
+
 export const deleteMember = async (id: string) => {
-  const { error } = await supabaseAdmin.from('profiles').update({ is_active: false }).eq('id', id);
-  if (error) throw new Error(error.message);
+  // Étape 1 — Supprimer l'accès Auth Supabase (révoque immédiatement toute connexion)
+  const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(id);
+  if (authErr) throw new Error(authErr.message);
+
+  // Étape 2 — Anonymiser le profil (conformité RGPD, préserve l'historique des FK)
+  const { error: profileErr } = await supabaseAdmin
+    .from('profiles')
+    .update({
+      first_name: '[Supprimé]',
+      last_name: '',
+      email: `deleted_${id.slice(0, 8)}@supprime.local`,
+      phone: null,
+      is_active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (profileErr) throw new Error(profileErr.message);
+
+  // Étape 3 — Journal d'audit (silencieux si table absente)
+  await logSecurityEvent('account_deleted', { target_id: id }).catch(() => {});
 };
 
 export const resetMemberPassword = async (userId: string, newPassword: string) => {
   const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
   if (error) throw new Error(error.message);
+  await logSecurityEvent('password_reset', { target_id: userId }).catch(() => {});
   return { success: true };
 };
 
