@@ -1,21 +1,22 @@
-import { useEffect, useState } from 'react';
-import { getMembers, updateMember, createMember, deleteMember, resetMemberPassword } from '@/lib/api';
-import { Search, Shield, Key, X, Check, Plus, Trash2, Copy, Eye, EyeOff, UserCheck, UserX } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { getAllAccounts, updateMember, createMember, deleteMember, resetMemberPassword } from '@/lib/api';
+import {
+  Search, Shield, Key, X, Check, Plus, Trash2, Copy, Eye, EyeOff,
+  UserCheck, UserX, Download, Upload, ChevronUp, ChevronDown,
+  Users, UserCog, AlertTriangle, Phone, Mail, Calendar, Filter,
+  RefreshCw, MoreHorizontal, Edit2, Lock, Unlock, ArrowUpDown,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+
+// ── Constantes ────────────────────────────────────────────────────────────────
 
 const ROLES = [
   'conducteur_louange', 'responsable_technique',
   'pasteur', 'choriste',
   'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste',
-  'sonorisateur', 'projectionniste', 'videaste', 'dev'
+  'sonorisateur', 'projectionniste', 'videaste', 'dev',
 ];
-
-// Client display normalization
-const normalizeRole = (role: string) => role === 'responsable_louange' ? 'conducteur_louange' : role;
-
-// Reverse: convert back to API format before saving
-const toApiRole = (role: string) => role === 'conducteur_louange' ? 'responsable_louange' : role;
 
 const ROLE_LABELS: Record<string, string> = {
   conducteur_louange: 'Conducteur Louange',
@@ -33,386 +34,804 @@ const ROLE_LABELS: Record<string, string> = {
   videaste: 'Vidéaste',
   dev: 'Développeur',
 };
-const roleLabel = (r: string) => ROLE_LABELS[normalizeRole(r) ?? r] ?? normalizeRole(r)?.replace(/_/g, ' ') ?? 'Membre';
 
 const ROLE_COLORS: Record<string, string> = {
-  pasteur: 'bg-destructive/10 text-destructive',
-  responsable_louange: 'bg-accent/10 text-accent',
-  conducteur_louange: 'bg-accent/10 text-accent',
-  dev: 'bg-foreground/10 text-foreground',
-  choriste: 'bg-success/10 text-success',
-  musicien: 'bg-gold/10 text-gold',
-  pianiste: 'bg-gold/10 text-gold',
-  batteur: 'bg-gold/10 text-gold',
-  guitariste_electrique: 'bg-gold/10 text-gold',
-  guitariste_acoustique: 'bg-gold/10 text-gold',
-  bassiste: 'bg-gold/10 text-gold',
-  sonorisateur: 'bg-info/10 text-info',
-  projectionniste: 'bg-warning/10 text-warning',
-  videaste: 'bg-purple-500/10 text-purple-600',
-  responsable_technique: 'bg-info/10 text-info',
+  pasteur: 'bg-destructive/10 text-destructive border-destructive/20',
+  responsable_louange: 'bg-accent/10 text-accent border-accent/20',
+  conducteur_louange: 'bg-accent/10 text-accent border-accent/20',
+  dev: 'bg-foreground/10 text-foreground border-foreground/20',
+  choriste: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  pianiste: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  batteur: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  guitariste_electrique: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  guitariste_acoustique: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  bassiste: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  sonorisateur: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  projectionniste: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  videaste: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+  responsable_technique: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const normalizeRole = (r: string) => r === 'responsable_louange' ? 'conducteur_louange' : r;
+const toApiRole = (r: string) => r === 'conducteur_louange' ? 'responsable_louange' : r;
+const roleLabel = (r: string) => ROLE_LABELS[normalizeRole(r) ?? r] ?? r.replace(/_/g, ' ');
 
 function parseUserRoles(role: string): string[] {
   if (!role) return [];
-
-  return Array.from(new Set(role.split(',').map(r => normalizeRole(r.trim())).filter(Boolean)));
+  return [...new Set(role.split(',').map(r => normalizeRole(r.trim())).filter(Boolean))];
 }
 
-function isVisibleUser(user: any): boolean {
-  return String(user?.is_active ?? 1) !== '0' && user?.first_name !== '[Supprimé]';
+function isActive(u: Account) {
+  return String(u.is_active ?? '1') !== '0';
 }
 
-type AccountUser = {
-  id: string | number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  is_active?: string | number;
-};
+function formatDate(iso?: string) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-type EditUser = { id: string; email: string; roles: string[] } | null;
-type ResetModal = { id: string; name: string; newPassword: string } | null;
+function getInitials(u: Account) {
+  return `${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase() || '?';
+}
 
-function generatePassword(length = 10): string {
+function generatePassword(length = 12): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Account = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  is_active?: string | number | boolean;
+  instrument?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type SortKey = 'name' | 'email' | 'role' | 'status' | 'created_at';
+type SortDir = 'asc' | 'desc';
+type ModalState =
+  | { type: 'none' }
+  | { type: 'create' }
+  | { type: 'edit'; user: Account }
+  | { type: 'reset'; user: Account; password: string }
+  | { type: 'delete'; user: Account };
+
+// ── Composants ────────────────────────────────────────────────────────────────
+
+function RoleBadge({ role }: { role: string }) {
+  const colors = ROLE_COLORS[role] || 'bg-muted text-muted-foreground border-muted';
+  return (
+    <span className={`inline-flex items-center border text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${colors}`}>
+      {roleLabel(role)}
+    </span>
+  );
+}
+
+function StatusBadge({ active }: { active: boolean }) {
+  return active
+    ? <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Actif</span>
+    : <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />Inactif</span>;
+}
+
+function AvatarCircle({ user, size = 'md' }: { user: Account; size?: 'sm' | 'md' | 'lg' }) {
+  const sz = size === 'sm' ? 'w-7 h-7 text-[10px]' : size === 'lg' ? 'w-14 h-14 text-lg' : 'w-9 h-9 text-sm';
+  return (
+    <div className={`${sz} rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center font-bold text-accent shrink-0`}>
+      {getInitials(user)}
+    </div>
+  );
+}
+
+// ── Modal Création ─────────────────────────────────────────────────────────────
+
+function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', role: 'choriste' });
+  const [saving, setSaving] = useState(false);
+  const [generatedPwd] = useState(generatePassword());
+  const [showPwd, setShowPwd] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await createMember({ ...form, phone: form.phone || undefined });
+      toast.success(`Compte créé pour ${form.first_name} ${form.last_name}`);
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur lors de la création');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="w-full max-w-lg">
+        <ModalHeader title="Créer un compte" icon={<Plus className="w-4 h-4 text-accent" />} onClose={onClose} />
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+          {/* Identité */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Identité</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Prénom" required>
+                <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
+                  placeholder="Jean" required className={inputCls} />
+              </Field>
+              <Field label="Nom" required>
+                <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}
+                  placeholder="Dupont" required className={inputCls} />
+              </Field>
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Contact</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Email" required>
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="jean@exemple.com" required className={`${inputCls} pl-8`} />
+                </div>
+              </Field>
+              <Field label="Téléphone">
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="+33 6 00 00 00 00" className={`${inputCls} pl-8`} />
+                </div>
+              </Field>
+            </div>
+          </div>
+
+          {/* Rôle */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Accès & Rôle</p>
+            <Field label="Rôle principal" required>
+              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className={inputCls}>
+                {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          {/* Mot de passe temporaire */}
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+            <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Lock className="w-3 h-3" /> Mot de passe provisoire
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="flex-1 font-mono text-sm text-foreground bg-background border border-border rounded-md px-3 py-2 tracking-widest">
+                {showPwd ? generatedPwd : '••••••••••••'}
+              </span>
+              <button type="button" onClick={() => setShowPwd(v => !v)}
+                className="w-8 h-8 flex items-center justify-center rounded border border-border hover:bg-muted text-muted-foreground">
+                {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+              <button type="button" onClick={() => { navigator.clipboard.writeText(generatedPwd); toast.success('Mot de passe copié'); }}
+                className="w-8 h-8 flex items-center justify-center rounded border border-border hover:bg-muted text-muted-foreground">
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-[10px] text-amber-600/80 mt-1.5">À communiquer à l'utilisateur — il devra le changer à la première connexion.</p>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-accent text-accent-foreground text-sm font-medium disabled:opacity-50">
+              <UserCheck className="w-4 h-4" /> {saving ? 'Création...' : 'Créer le compte'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground">
+              Annuler
+            </button>
+          </div>
+        </form>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+// ── Modal Fiche Utilisateur ───────────────────────────────────────────────────
+
+type EditTab = 'identity' | 'access' | 'security';
+
+function EditModal({ user, onClose, onUpdated }: { user: Account; onClose: () => void; onUpdated: () => void }) {
+  const [tab, setTab] = useState<EditTab>('identity');
+  const [form, setForm] = useState({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone || '' });
+  const [roles, setRoles] = useState<string[]>(parseUserRoles(user.role).length > 0 ? parseUserRoles(user.role) : ['choriste']);
+  const [saving, setSaving] = useState(false);
+  const [resetPwd, setResetPwd] = useState(generatePassword());
+  const [showResetPwd, setShowResetPwd] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const active = isActive(user);
+
+  const handleSaveIdentity = async () => {
+    setSaving(true);
+    try {
+      await updateMember(String(user.id), { first_name: form.first_name, last_name: form.last_name, phone: form.phone || null });
+      toast.success('Identité mise à jour');
+      onUpdated();
+    } catch (err: any) { toast.error(err?.message || 'Erreur'); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveRoles = async () => {
+    setSaving(true);
+    try {
+      const apiRoles = [...new Set(roles.map(r => toApiRole(normalizeRole(r))))].join(',');
+      await updateMember(String(user.id), { role: apiRoles });
+      toast.success('Rôles mis à jour');
+      onUpdated();
+    } catch (err: any) { toast.error(err?.message || 'Erreur'); }
+    finally { setSaving(false); }
+  };
+
+  const handleResetPassword = async () => {
+    setResetting(true);
+    try {
+      await resetMemberPassword(String(user.id), resetPwd);
+      toast.success(`Mot de passe réinitialisé pour ${user.first_name}`);
+    } catch (err: any) { toast.error(err?.message || 'Erreur'); }
+    finally { setResetting(false); }
+  };
+
+  const handleToggleActive = async () => {
+    setSaving(true);
+    try {
+      await updateMember(String(user.id), { is_active: !active });
+      toast.success(`Compte ${active ? 'suspendu' : 'réactivé'}`);
+      onUpdated();
+      onClose();
+    } catch (err: any) { toast.error(err?.message || 'Erreur'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteMember(String(user.id));
+      toast.success(`Compte de ${user.first_name} ${user.last_name} supprimé`);
+      onUpdated();
+      onClose();
+    } catch (err: any) { toast.error(err?.message || 'Erreur'); }
+    finally { setDeleting(false); }
+  };
+
+  const toggleRole = (r: string) => {
+    const norm = normalizeRole(r);
+    setRoles(prev => prev.includes(norm) ? prev.filter(x => x !== norm) : [...prev, norm]);
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="w-full max-w-lg">
+        {/* En-tête profil */}
+        <div className="flex items-center gap-4 p-5 border-b border-border">
+          <AvatarCircle user={user} size="lg" />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-foreground">{user.first_name} {user.last_name}</h2>
+            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <StatusBadge active={active} />
+              {parseUserRoles(user.role).slice(0, 2).map(r => <RoleBadge key={r} role={r} />)}
+            </div>
+          </div>
+          <div className="text-right text-[10px] text-muted-foreground shrink-0">
+            <p>Créé le</p>
+            <p className="font-medium text-foreground">{formatDate(user.created_at)}</p>
+            <p className="mt-1">Modifié</p>
+            <p className="font-medium text-foreground">{formatDate(user.updated_at)}</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground self-start ml-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Onglets */}
+        <div className="flex border-b border-border px-5">
+          {([['identity', '👤 Identité'], ['access', '🛡️ Accès'], ['security', '🔐 Sécurité']] as [EditTab, string][]).map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                tab === t ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-5 space-y-4">
+
+          {/* ── Onglet Identité ── */}
+          {tab === 'identity' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Prénom">
+                  <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} className={inputCls} />
+                </Field>
+                <Field label="Nom">
+                  <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} className={inputCls} />
+                </Field>
+              </div>
+              <Field label="Email">
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input type="email" value={form.email} disabled
+                    className={`${inputCls} pl-8 opacity-50 cursor-not-allowed`} />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">L'email ne peut pas être modifié — il sert d'identifiant Supabase.</p>
+              </Field>
+              <Field label="Téléphone">
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="+33 6 00 00 00 00" className={`${inputCls} pl-8`} />
+                </div>
+              </Field>
+              <button onClick={handleSaveIdentity} disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium disabled:opacity-50">
+                <Check className="w-3.5 h-3.5" /> {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+              </button>
+            </>
+          )}
+
+          {/* ── Onglet Accès ── */}
+          {tab === 'access' && (
+            <>
+              <p className="text-xs text-muted-foreground">Cochez les rôles accordés à cet utilisateur. Un rôle détermine les sections accessibles dans l'espace membre.</p>
+              <div className="grid grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
+                {ROLES.map(r => {
+                  const selected = roles.includes(r);
+                  return (
+                    <button key={r} type="button" onClick={() => toggleRole(r)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-all ${
+                        selected
+                          ? 'bg-accent/10 border-accent/30 text-accent font-semibold'
+                          : 'border-border text-foreground hover:bg-muted/40'
+                      }`}>
+                      <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${selected ? 'bg-accent border-accent' : 'border-muted-foreground/40'}`}>
+                        {selected && <Check className="w-2.5 h-2.5 text-accent-foreground" />}
+                      </div>
+                      {roleLabel(r)}
+                    </button>
+                  );
+                })}
+              </div>
+              {roles.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1 border-t border-border">
+                  {roles.map(r => <RoleBadge key={r} role={r} />)}
+                </div>
+              )}
+              <button onClick={handleSaveRoles} disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium disabled:opacity-50">
+                <Shield className="w-3.5 h-3.5" /> {saving ? 'Sauvegarde...' : 'Appliquer les rôles'}
+              </button>
+            </>
+          )}
+
+          {/* ── Onglet Sécurité ── */}
+          {tab === 'security' && (
+            <>
+              {/* Reset mot de passe */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-foreground mb-1 flex items-center gap-1.5"><Key className="w-3.5 h-3.5 text-warning" /> Réinitialiser le mot de passe</h3>
+                <p className="text-[10px] text-muted-foreground mb-3">Générez un nouveau mot de passe temporaire et communiquez-le à l'utilisateur.</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="flex-1 font-mono text-sm bg-warning/5 border border-warning/30 rounded-lg px-3 py-2 tracking-widest text-foreground">
+                    {showResetPwd ? resetPwd : '••••••••••••'}
+                  </span>
+                  <button type="button" onClick={() => setShowResetPwd(v => !v)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                    {showResetPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(resetPwd); toast.success('Copié'); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" onClick={() => setResetPwd(generatePassword())}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <button onClick={handleResetPassword} disabled={resetting}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-warning text-warning-foreground text-xs font-semibold disabled:opacity-50">
+                  <Key className="w-3.5 h-3.5" /> {resetting ? 'Réinitialisation...' : 'Confirmer la réinitialisation'}
+                </button>
+              </div>
+
+              {/* Statut du compte */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-foreground mb-1 flex items-center gap-1.5">
+                  {active ? <Lock className="w-3.5 h-3.5 text-muted-foreground" /> : <Unlock className="w-3.5 h-3.5 text-emerald-500" />}
+                  Statut du compte
+                </h3>
+                <p className="text-[10px] text-muted-foreground mb-3">
+                  {active
+                    ? 'Suspendre empêche la connexion sans supprimer les données.'
+                    : 'Le compte est actuellement suspendu. Réactiver pour rétablir l\'accès.'}
+                </p>
+                <button onClick={handleToggleActive} disabled={saving}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-50 ${
+                    active
+                      ? 'bg-orange-500/10 text-orange-600 border border-orange-500/30 hover:bg-orange-500/20'
+                      : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20'
+                  }`}>
+                  {active ? <><UserX className="w-3.5 h-3.5" /> Suspendre le compte</> : <><UserCheck className="w-3.5 h-3.5" /> Réactiver le compte</>}
+                </button>
+              </div>
+
+              {/* Zone dangereuse */}
+              <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-destructive mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Zone dangereuse</h3>
+                <p className="text-[10px] text-muted-foreground mb-3">La suppression est définitive — toutes les données associées seront perdues.</p>
+                {!confirmDelete ? (
+                  <button onClick={() => setConfirmDelete(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-destructive/10 text-destructive border border-destructive/20 text-xs font-semibold hover:bg-destructive/20">
+                    <Trash2 className="w-3.5 h-3.5" /> Supprimer définitivement
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-destructive">⚠️ Supprimer le compte de {user.first_name} {user.last_name} ?</p>
+                    <div className="flex gap-2">
+                      <button onClick={handleDelete} disabled={deleting}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold disabled:opacity-50">
+                        <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Suppression...' : 'Confirmer'}
+                      </button>
+                      <button onClick={() => setConfirmDelete(false)}
+                        className="px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+// ── Composants utilitaires partagés ───────────────────────────────────────────
+
+const inputCls = 'w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent/50';
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+        {label}{required && <span className="text-destructive ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-foreground/40 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.96, y: 8 }} animate={{ scale: 1, y: 0 }}
+        className="bg-card rounded-xl border border-border shadow-2xl w-full"
+        onClick={e => e.stopPropagation()}>
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ModalHeader({ title, icon, onClose }: { title: string; icon?: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+      {icon}
+      <h2 className="text-sm font-bold text-foreground flex-1">{title}</h2>
+      <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+    </div>
+  );
+}
+
+// ── Page principale ───────────────────────────────────────────────────────────
+
 export default function ComptesPage() {
-  const [users, setUsers] = useState<AccountUser[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState<EditUser>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ first_name: '', last_name: '', email: '', role: 'choriste' });
-  const [resetModal, setResetModal] = useState<ResetModal>(null);
-  const [resetConfirming, setResetConfirming] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [filterRole, setFilterRole] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [modal, setModal] = useState<ModalState>({ type: 'none' });
 
   const load = () => {
     setLoading(true);
-    getMembers()
-      .then(data => setUsers(data.filter(isVisibleUser)))
-      .catch(() => setUsers([]))
+    getAllAccounts()
+      .then(data => setAccounts(data as Account[]))
+      .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
-  const handleUpdateRole = async () => {
-    if (!editing) return;
+  // ── Tri ──
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
 
-    const nextRoles = Array.from(
-      new Set(editing.roles.map(r => toApiRole(normalizeRole(r))).filter(Boolean))
-    );
-    const nextRoleValue = nextRoles.join(',');
-
-    try {
-      await updateMember(editing.id, { role: nextRoleValue });
-      toast.success('Rôles mis à jour');
-      setEditing(null);
-      load();
-    } catch (err: any) {
-      toast.error(`Erreur : ${err?.message || 'inconnue'}`);
+  // ── Filtres + tri ──
+  const filtered = useMemo(() => {
+    let list = accounts;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(u =>
+        `${u.first_name} ${u.last_name} ${u.email} ${u.phone ?? ''} ${u.role}`.toLowerCase().includes(q)
+      );
     }
-  };
+    if (filterRole) list = list.filter(u => parseUserRoles(u.role).includes(filterRole));
+    if (filterStatus === 'active') list = list.filter(u => isActive(u));
+    if (filterStatus === 'inactive') list = list.filter(u => !isActive(u));
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await createMember(createForm);
-      toast.success('Compte créé');
-      setCreateForm({ first_name: '', last_name: '', email: '', role: 'choriste' });
-      setShowCreate(false);
-      load();
-    } catch {
-      toast.error('Erreur lors de la création');
-    }
-  };
-
-  const handleDelete = async (id: string | number, name: string) => {
-    if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
-
-    try {
-      await deleteMember(String(id));
-      setUsers(prev => prev.filter(user => String(user.id) !== String(id)));
-      toast.success('Compte supprimé');
-    } catch (err: any) {
-      toast.error(`Erreur lors de la suppression: ${err?.message || 'inconnue'}`);
-    }
-  };
-
-  const openResetModal = (id: string | number, name: string) => {
-    setShowPassword(false);
-    setResetConfirming(false);
-    setResetModal({ id: String(id), name, newPassword: generatePassword() });
-  };
-
-  const handleConfirmReset = async () => {
-    if (!resetModal) return;
-    setResetConfirming(true);
-    try {
-      await resetMemberPassword(resetModal.id, resetModal.newPassword);
-      toast.success(`Mot de passe réinitialisé pour ${resetModal.name}`);
-      setResetModal(null);
-    } catch (err: any) {
-      toast.error(`Erreur : ${err?.message || 'inconnue'}`);
-    } finally {
-      setResetConfirming(false);
-    }
-  };
-
-  const handleToggleActive = async (id: string | number, name: string, currentActive: boolean) => {
-    const action = currentActive ? 'désactiver' : 'réactiver';
-    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} le compte de ${name} ?`)) return;
-    try {
-      await updateMember(String(id), { is_active: !currentActive });
-      toast.success(`Compte ${currentActive ? 'désactivé' : 'réactivé'}`);
-      load();
-    } catch (err: any) {
-      toast.error(`Erreur : ${err?.message || 'inconnue'}`);
-    }
-  };
-
-  const toggleRole = (role: string) => {
-    const normalizedRole = normalizeRole(role);
-    if (!editing) return;
-
-    setEditing(prev => {
-      if (!prev) return prev;
-      const has = prev.roles.includes(normalizedRole);
-      return {
-        ...prev,
-        roles: has ? prev.roles.filter(r => r !== normalizedRole) : [...prev.roles, normalizedRole],
-      };
+    list = [...list].sort((a, b) => {
+      let va: string, vb: string;
+      if (sortKey === 'name') { va = `${a.last_name} ${a.first_name}`; vb = `${b.last_name} ${b.first_name}`; }
+      else if (sortKey === 'email') { va = a.email; vb = b.email; }
+      else if (sortKey === 'role') { va = a.role; vb = b.role; }
+      else if (sortKey === 'status') { va = isActive(a) ? '1' : '0'; vb = isActive(b) ? '1' : '0'; }
+      else { va = a.created_at ?? ''; vb = b.created_at ?? ''; }
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     });
+
+    return list;
+  }, [accounts, search, filterRole, filterStatus, sortKey, sortDir]);
+
+  // ── Stats ──
+  const stats = useMemo(() => {
+    const total = accounts.length;
+    const actifs = accounts.filter(isActive).length;
+    const inactifs = total - actifs;
+    const rolesCount = new Map<string, number>();
+    accounts.filter(isActive).forEach(u => {
+      parseUserRoles(u.role).forEach(r => rolesCount.set(r, (rolesCount.get(r) ?? 0) + 1));
+    });
+    const topRole = [...rolesCount.entries()].sort((a, b) => b[1] - a[1])[0];
+    return { total, actifs, inactifs, distinctRoles: rolesCount.size, topRole };
+  }, [accounts]);
+
+  // ── Export CSV ──
+  const handleExport = () => {
+    const rows = filtered.map(u => [
+      `"${u.last_name}"`, `"${u.first_name}"`, `"${u.email}"`,
+      `"${u.phone ?? ''}"`,
+      `"${parseUserRoles(u.role).map(roleLabel).join(', ')}"`,
+      `"${isActive(u) ? 'Actif' : 'Inactif'}"`,
+      `"${formatDate(u.created_at)}"`,
+    ].join(';'));
+    const header = '"Nom";"Prénom";"Email";"Téléphone";"Rôles";"Statut";"Créé le"';
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `comptes-aef-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    toast.success('Export CSV téléchargé');
   };
 
-  const filtered = users.filter(u =>
-    `${u.first_name} ${u.last_name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase())
+  // ── Colonne triable ──
+  const SortTh = ({ label, k, className = '' }: { label: string; k: SortKey; className?: string }) => (
+    <th className={`px-4 py-3 text-left cursor-pointer select-none hover:text-foreground transition-colors ${className}`} onClick={() => handleSort(k)}>
+      <span className="flex items-center gap-1">
+        {label}
+        {sortKey === k
+          ? sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+          : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+      </span>
+    </th>
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-bold text-foreground flex items-center gap-2">🔐 Gestion des comptes</h1>
-        <button onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-md border-2 border-accent text-accent text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
-          <Plus className="w-4 h-4" /> Nouveau compte
-        </button>
-      </div>
+    <div className="space-y-5">
 
-      {/* Create form */}
-      <AnimatePresence>
-        {showCreate && (
-          <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            onSubmit={handleCreate} className="bg-card rounded-lg border border-border p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-hidden">
-            <input value={createForm.first_name} onChange={e => setCreateForm({ ...createForm, first_name: e.target.value })} placeholder="Prénom" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
-            <input value={createForm.last_name} onChange={e => setCreateForm({ ...createForm, last_name: e.target.value })} placeholder="Nom" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
-            <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} placeholder="Email" className="px-3 py-2 rounded-md border border-input bg-background text-sm" required />
-            <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="px-3 py-2 rounded-md border border-input bg-background text-sm">
-              {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
-            </select>
-            <div className="sm:col-span-2 flex gap-2">
-              <button type="submit" className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium">Créer</button>
-              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-md border border-border text-sm">Annuler</button>
-            </div>
-          </motion.form>
-        )}
-      </AnimatePresence>
-
-      <div className="bg-card rounded-lg border border-border p-4 mb-4 flex gap-6">
-        <div><span className="text-2xl font-bold text-foreground">{loading ? '—' : users.length}</span><p className="text-xs text-muted-foreground">Utilisateurs</p></div>
-        <div className="border-l border-border pl-6"><span className="text-2xl font-bold text-foreground">{new Set(users.flatMap(u => parseUserRoles(u.role))).size}</span><p className="text-xs text-muted-foreground">Rôles distincts</p></div>
-      </div>
-
-      <div className="bg-card rounded-lg border border-border p-3 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un utilisateur..."
-            className="w-full pl-9 pr-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
+      {/* ── En-tête ── */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-lg font-bold text-foreground flex items-center gap-2">🔐 Gestion des comptes</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Annuaire des utilisateurs · gestion des accès et des rôles</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleExport} title="Exporter la liste filtrée en CSV"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
+          <button onClick={() => setModal({ type: 'create' })}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors">
+            <Plus className="w-4 h-4" /> Nouveau compte
+          </button>
         </div>
       </div>
 
-      {/* Edit roles modal */}
-      <AnimatePresence>
-        {editing && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-foreground/30 z-50 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-card rounded-lg border border-border p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-foreground">Modifier les rôles</h3>
-                <button onClick={() => setEditing(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">{editing.email}</p>
-              <div className="space-y-1.5 mb-4 max-h-60 overflow-y-auto">
-                {ROLES.map(r => {
-                  const selected = editing.roles.includes(r);
-                  return (
-                    <button key={r} type="button" onClick={() => toggleRole(r)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between transition-colors ${
-                        selected ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground'
-                      }`}>
-                      <span>{roleLabel(r)}</span>
-                      {selected && <Check className="w-4 h-4 text-primary" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {editing.roles.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {editing.roles.map(r => (
-                    <span key={r} className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[r] || 'bg-muted text-muted-foreground'}`}>
-                      {roleLabel(r)}
-                      <button type="button" onClick={() => toggleRole(r)}><X className="w-3 h-3" /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button onClick={handleUpdateRole} className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Sauvegarder</button>
-                <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-md border border-border text-sm">Annuler</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Reset password modal ── */}
-      <AnimatePresence>
-        {resetModal && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-foreground/40 z-50 flex items-center justify-center p-4"
-            onClick={() => !resetConfirming && setResetModal(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 8 }} animate={{ scale: 1, y: 0 }}
-              className="bg-card rounded-xl border border-border p-6 w-full max-w-sm shadow-xl"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Key className="w-4 h-4 text-warning" /> Réinitialiser le mot de passe
-                </h3>
-                <button onClick={() => setResetModal(null)} disabled={resetConfirming}>
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Un nouveau mot de passe sera attribué à <strong>{resetModal.name}</strong>.
-                Notez-le avant de confirmer — il ne sera plus visible ensuite.
-              </p>
-
-              {/* Password display */}
-              <div className="mb-4">
-                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
-                  Nouveau mot de passe généré
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 border-warning/40 bg-warning/5 font-mono text-sm">
-                    <span className="flex-1 select-all tracking-widest">
-                      {showPassword ? resetModal.newPassword : '••••••••••'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title={showPassword ? 'Masquer' : 'Afficher'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(resetModal.newPassword);
-                      toast.success('Mot de passe copié !');
-                    }}
-                    className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="Copier"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={handleConfirmReset}
-                  disabled={resetConfirming}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-warning text-warning-foreground text-sm font-semibold disabled:opacity-50 hover:bg-warning/90 transition-colors"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  {resetConfirming ? 'Réinitialisation...' : 'Confirmer la réinitialisation'}
-                </button>
-                <button
-                  onClick={() => setResetModal(null)}
-                  disabled={resetConfirming}
-                  className="px-4 py-2.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Annuler
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {loading ? <p className="text-sm text-muted-foreground">Chargement...</p> : (
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="grid grid-cols-12 px-4 py-3 border-b border-border text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-            <div className="col-span-1">#</div><div className="col-span-3">Nom</div><div className="col-span-3">Email</div>
-            <div className="col-span-2">Rôles</div><div className="col-span-3 text-right">Actions</div>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { icon: Users, label: 'Comptes total', value: stats.total, color: 'text-primary', bg: 'bg-primary/10' },
+          { icon: UserCheck, label: 'Actifs', value: stats.actifs, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+          { icon: UserX, label: 'Inactifs / Suspendus', value: stats.inactifs, color: 'text-muted-foreground', bg: 'bg-muted' },
+          { icon: Shield, label: 'Rôles distincts', value: stats.distinctRoles, color: 'text-accent', bg: 'bg-accent/10' },
+        ].map(kpi => (
+          <div key={kpi.label} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${kpi.bg}`}>
+              <kpi.icon className={`w-4.5 h-4.5 ${kpi.color}`} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-foreground leading-none">{loading ? '—' : kpi.value}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{kpi.label}</p>
+            </div>
           </div>
-          {filtered.map((u, i) => {
-            const roles = parseUserRoles(u.role);
-            return (
-              <motion.div key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                className="grid grid-cols-12 px-4 py-3 border-b border-border last:border-0 items-center hover:bg-muted/30">
-                <div className="col-span-1 text-xs text-muted-foreground">{i + 1}</div>
-                <div className="col-span-3 text-sm font-medium text-foreground">{u.first_name} {u.last_name}</div>
-                <div className="col-span-3 text-xs text-muted-foreground truncate">{u.email}</div>
-                <div className="col-span-2 flex flex-wrap gap-0.5">
-                  {roles.length > 0 ? roles.map(r => (
-                    <span key={r} className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium ${ROLE_COLORS[r] || 'bg-muted text-muted-foreground'}`}>
-                      {roleLabel(r)}
-                    </span>
-                  )) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </div>
-                <div className="col-span-3 flex gap-1 justify-end flex-wrap">
-                  <button onClick={() => setEditing({ id: String(u.id), email: u.email, roles: roles.length > 0 ? roles : ['choriste'] })}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-accent hover:bg-accent/10">
-                    <Shield className="w-3 h-3" /> Rôles
-                  </button>
-                  <button onClick={() => openResetModal(u.id, `${u.first_name} ${u.last_name}`)}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-warning hover:bg-warning/10">
-                    <Key className="w-3 h-3" /> Reset MDP
-                  </button>
-                  <button
-                    onClick={() => handleToggleActive(u.id, `${u.first_name} ${u.last_name}`, String(u.is_active ?? 1) !== '0')}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted"
-                    title={String(u.is_active ?? 1) !== '0' ? 'Désactiver le compte' : 'Réactiver le compte'}
-                  >
-                    {String(u.is_active ?? 1) !== '0'
-                      ? <><UserX className="w-3 h-3" /> Désactiver</>
-                      : <><UserCheck className="w-3 h-3" /> Activer</>
-                    }
-                  </button>
-                  <button onClick={() => handleDelete(u.id, `${u.first_name} ${u.last_name}`)}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-destructive hover:bg-destructive/10">
-                    <Trash2 className="w-3 h-3" /> Supprimer
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+        ))}
+      </div>
+
+      {/* ── Barre de contrôle ── */}
+      <div className="bg-card border border-border rounded-xl p-3 flex flex-wrap gap-2 items-center">
+        {/* Recherche */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher par nom, email, téléphone, rôle..."
+            className="w-full pl-8 pr-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent/50" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filtre rôle */}
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+          <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
+            className="px-2.5 py-2 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-accent/50">
+            <option value="">Tous les rôles</option>
+            {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+          </select>
+        </div>
+
+        {/* Filtre statut */}
+        <div className="flex gap-1">
+          {(['all', 'active', 'inactive'] as const).map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                filterStatus === s ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}>
+              {{ all: 'Tous', active: '✅ Actifs', inactive: '⛔ Inactifs' }[s]}
+            </button>
+          ))}
+        </div>
+
+        {/* Résultats */}
+        <p className="text-xs text-muted-foreground ml-auto">
+          {filtered.length} / {accounts.length} compte{accounts.length > 1 ? 's' : ''}
+        </p>
+      </div>
+
+      {/* ── Tableau ── */}
+      {loading ? (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Chargement des comptes...</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Aucun compte ne correspond aux filtres.</p>
+          {(search || filterRole || filterStatus !== 'all') && (
+            <button onClick={() => { setSearch(''); setFilterRole(''); setFilterStatus('all'); }}
+              className="text-xs text-accent hover:underline mt-2">Réinitialiser les filtres</button>
+          )}
+        </div>
+      ) : (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border text-[10px] text-muted-foreground uppercase tracking-wider">
+                <SortTh label="Utilisateur" k="name" className="pl-4 py-3 min-w-[200px]" />
+                <SortTh label="Email" k="email" className="hidden sm:table-cell min-w-[180px]" />
+                <th className="px-4 py-3 text-left">Rôles</th>
+                <SortTh label="Statut" k="status" className="hidden md:table-cell w-24" />
+                <SortTh label="Création" k="created_at" className="hidden lg:table-cell w-28" />
+                <th className="px-4 py-3 text-right w-10">
+                  <MoreHorizontal className="w-3.5 h-3.5 ml-auto" />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u, i) => {
+                const roles = parseUserRoles(u.role);
+                const active = isActive(u);
+                return (
+                  <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.015 }}
+                    className={`border-t border-border hover:bg-muted/30 transition-colors ${!active ? 'opacity-60' : ''}`}>
+                    {/* Utilisateur */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <AvatarCircle user={u} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{u.first_name} {u.last_name}</p>
+                          {u.phone && <p className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{u.phone}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    {/* Email */}
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <p className="text-xs text-muted-foreground truncate max-w-[180px]">{u.email}</p>
+                    </td>
+                    {/* Rôles */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {roles.length > 0
+                          ? roles.slice(0, 2).map(r => <RoleBadge key={r} role={r} />)
+                          : <span className="text-xs text-muted-foreground">—</span>}
+                        {roles.length > 2 && (
+                          <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full border border-border">+{roles.length - 2}</span>
+                        )}
+                      </div>
+                    </td>
+                    {/* Statut */}
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <StatusBadge active={active} />
+                    </td>
+                    {/* Date */}
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(u.created_at)}</p>
+                    </td>
+                    {/* Actions */}
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => setModal({ type: 'edit', user: u })}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-auto"
+                        title="Gérer ce compte">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Pied de tableau */}
+          <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
+            <p className="text-[10px] text-muted-foreground">
+              {filtered.length} compte{filtered.length > 1 ? 's' : ''} affiché{filtered.length > 1 ? 's' : ''}
+              {filterStatus !== 'all' || filterRole || search ? ' (filtrés)' : ''}
+            </p>
+            <button onClick={load} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              <RefreshCw className="w-3 h-3" /> Actualiser
+            </button>
+          </div>
         </div>
       )}
+
+      {/* ── Modales ── */}
+      <AnimatePresence>
+        {modal.type === 'create' && (
+          <CreateModal onClose={() => setModal({ type: 'none' })} onCreated={load} />
+        )}
+        {modal.type === 'edit' && (
+          <EditModal user={modal.user} onClose={() => setModal({ type: 'none' })} onUpdated={load} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -95,6 +95,17 @@ export const getMembers = () =>
       return (data || []).filter(isActiveMember).map(normalizeMember);
     });
 
+// Version complète pour la gestion DSI (inclut created_at + tous les inactifs)
+export const getAllAccounts = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color, created_at, updated_at')
+    .neq('first_name', '[Supprimé]')
+    .order('last_name');
+  throwIfError(data, error);
+  return (data || []).map(normalizeMember);
+};
+
 export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string }) => {
   // Create auth user via Supabase Admin SDK
   const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
