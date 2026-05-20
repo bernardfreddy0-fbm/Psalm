@@ -9,13 +9,13 @@ function parseValue(val: any): string {
 }
 
 const FIELDS = [
-  { key: 'session_timeout', label: 'Timeout session (minutes)', type: 'number', icon: Clock },
+  { key: 'session_timeout', label: 'Délai d\'expiration session (minutes)', type: 'number', icon: Clock },
   { key: 'max_login_attempts', label: 'Tentatives max de connexion', type: 'number', icon: Lock },
   { key: 'password_min_length', label: 'Longueur min mot de passe', type: 'number', icon: Lock },
   { key: 'password_require_special', label: 'Caractères spéciaux requis', type: 'toggle' },
   { key: 'ip_whitelist_enabled', label: 'Restriction par IP', type: 'toggle' },
   { key: 'audit_log_enabled', label: 'Journal d\'activité', type: 'toggle' },
-  { key: 'audit_log_retention_days', label: 'Rétention logs (jours)', type: 'number', icon: Clock },
+  { key: 'audit_log_retention_days', label: 'Rétention journaux (jours)', type: 'number', icon: Clock },
 ];
 
 export default function ConfigSecurity() {

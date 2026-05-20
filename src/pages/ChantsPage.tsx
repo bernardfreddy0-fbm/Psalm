@@ -67,7 +67,7 @@ export default function ChantsPage() {
       await uploadPartition(song.id, file);
       load();
     } catch (err) {
-      alert('Erreur upload: ' + (err as Error).message);
+      alert('Erreur lors du téléchargement : ' + (err as Error).message);
     } finally {
       setUploadingId(null);
     }
@@ -199,7 +199,7 @@ export default function ChantsPage() {
                   )}
                   <label className="block cursor-pointer">
                     <span className="text-xs text-muted-foreground">
-                      {uploadingId === editing.id ? 'Upload en cours...' : 'Ajouter / remplacer (PDF, max 5 Mo)'}
+                      {uploadingId === editing.id ? 'Téléchargement en cours...' : 'Ajouter / remplacer (PDF, max 5 Mo)'}
                     </span>
                     <input type="file" accept=".pdf,application/pdf" className="hidden"
                       disabled={uploadingId === editing.id}

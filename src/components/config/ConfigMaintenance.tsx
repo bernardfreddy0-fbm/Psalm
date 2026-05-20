@@ -45,7 +45,7 @@ export default function ConfigMaintenance() {
     { icon: Users, label: 'Utilisateurs', value: db.users_count || 0, color: 'text-accent' },
     { icon: Calendar, label: 'Planning', value: db.planning_count || 0, color: 'text-success' },
     { icon: Music, label: 'Chants', value: db.songs_count || 0, color: 'text-gold' },
-    { icon: Activity, label: 'Logs', value: db.logs_count || 0, color: 'text-warning' },
+    { icon: Activity, label: 'Journaux', value: db.logs_count || 0, color: 'text-warning' },
   ];
 
   return (

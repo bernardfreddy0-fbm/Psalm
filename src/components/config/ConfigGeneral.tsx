@@ -9,8 +9,8 @@ const FIELDS = [
   { key: 'church_address', label: 'Adresse', type: 'text' },
   { key: 'church_phone', label: 'Téléphone', type: 'tel' },
   { key: 'timezone', label: 'Fuseau horaire', type: 'select', options: ['Europe/Paris', 'Europe/London', 'America/New_York', 'Africa/Douala'] },
-  { key: 'default_language', label: 'Langue', type: 'select', options: ['fr', 'en'] },
-  { key: 'cult_day', label: 'Jour du culte', type: 'select', options: ['sunday', 'saturday', 'friday'] },
+  { key: 'default_language', label: 'Langue', type: 'select', options: ['fr', 'en'], optionLabels: { fr: 'Français', en: 'English' } },
+  { key: 'cult_day', label: 'Jour du culte', type: 'select', options: ['sunday', 'saturday', 'friday'], optionLabels: { sunday: 'Dimanche', saturday: 'Samedi', friday: 'Vendredi' } },
   { key: 'cult_time', label: 'Heure du culte', type: 'time' },
   { key: 'cult_duration', label: 'Durée (min)', type: 'number' },
 ];
@@ -77,7 +77,7 @@ export default function ConfigGeneral() {
               {f.type === 'select' ? (
                 <select value={values[f.key] || ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}
                   className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent">
-                  {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                  {f.options?.map(o => <option key={o} value={o}>{(f as any).optionLabels?.[o] ?? o}</option>)}
                 </select>
               ) : (
                 <input type={f.type} value={values[f.key] || ''}

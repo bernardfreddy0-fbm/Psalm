@@ -13,23 +13,23 @@ const INTEGRATIONS = [
     id: 'google', label: 'Google Calendar', icon: Calendar,
     fields: [
       { key: 'google_calendar_enabled', label: 'Activé', type: 'toggle' },
-      { key: 'google_client_id', label: 'Client ID', type: 'text' },
-      { key: 'google_client_secret', label: 'Client Secret', type: 'password' },
-      { key: 'google_calendar_id', label: 'Calendar ID', type: 'text' },
+      { key: 'google_client_id', label: 'ID client', type: 'text' },
+      { key: 'google_client_secret', label: 'Secret client', type: 'password' },
+      { key: 'google_calendar_id', label: 'ID du calendrier', type: 'text' },
     ],
   },
   {
     id: 'spotify', label: 'Spotify', icon: Music2,
     fields: [
       { key: 'spotify_enabled', label: 'Activé', type: 'toggle' },
-      { key: 'spotify_client_id', label: 'Client ID', type: 'text' },
-      { key: 'spotify_client_secret', label: 'Client Secret', type: 'password' },
+      { key: 'spotify_client_id', label: 'ID client', type: 'text' },
+      { key: 'spotify_client_secret', label: 'Secret client', type: 'password' },
     ],
   },
   {
-    id: 'backup', label: 'Backup Cloud', icon: Cloud,
+    id: 'backup', label: 'Sauvegarde cloud', icon: Cloud,
     fields: [
-      { key: 'backup_auto_enabled', label: 'Backup automatique', type: 'toggle' },
+      { key: 'backup_auto_enabled', label: 'Sauvegarde automatique', type: 'toggle' },
       { key: 'backup_frequency', label: 'Fréquence', type: 'select', options: ['daily', 'weekly', 'monthly'] },
       { key: 'backup_retention_days', label: 'Rétention (jours)', type: 'number' },
     ],
@@ -91,7 +91,7 @@ export default function ConfigIntegrations() {
                       <label className="block text-xs font-medium text-foreground mb-1">{f.label}</label>
                       <select value={values[f.key] || ''} onChange={e => setValues(p => ({ ...p, [f.key]: e.target.value }))}
                         className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent">
-                        {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                        {f.options?.map(o => <option key={o} value={o}>{{ daily: 'Quotidienne', weekly: 'Hebdomadaire', monthly: 'Mensuelle' }[o] ?? o}</option>)}
                       </select>
                     </>
                   ) : (

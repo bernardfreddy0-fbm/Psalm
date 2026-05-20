@@ -31,8 +31,8 @@ const CHANNELS = [
     id: 'sms', label: 'SMS Twilio', icon: MessageSquare,
     fields: [
       { key: 'sms_enabled', label: 'Activé', type: 'toggle' },
-      { key: 'sms_twilio_sid', label: 'Account SID', type: 'text' },
-      { key: 'sms_twilio_token', label: 'Auth Token', type: 'password', encrypted: true },
+      { key: 'sms_twilio_sid', label: 'SID du compte', type: 'text' },
+      { key: 'sms_twilio_token', label: 'Jeton d\'authentification', type: 'password', encrypted: true },
       { key: 'sms_twilio_from', label: 'Numéro expéditeur', type: 'tel' },
     ],
   },

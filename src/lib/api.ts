@@ -34,9 +34,26 @@ function normalizeMember(member: any) {
 export function setToken(_token: string) { /* géré par Supabase */ }
 export function clearToken() { supabase.auth.signOut(); }
 
+function translateSupabaseError(msg: string): string {
+  const map: Record<string, string> = {
+    'Invalid login credentials': 'Identifiants incorrects',
+    'Email not confirmed': 'Email non confirmé — vérifiez votre boîte mail',
+    'User not found': 'Aucun compte associé à cet email',
+    'Too many requests': 'Trop de tentatives — réessayez dans quelques minutes',
+    'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères',
+    'User already registered': 'Un compte existe déjà avec cet email',
+    'Unable to validate email address': 'Adresse email invalide',
+    'Signup is disabled': 'Les inscriptions sont désactivées',
+  };
+  for (const [en, fr] of Object.entries(map)) {
+    if (msg.includes(en)) return fr;
+  }
+  return msg;
+}
+
 export async function login(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(translateSupabaseError(error.message));
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')

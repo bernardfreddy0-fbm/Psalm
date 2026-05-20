@@ -17,7 +17,23 @@ const normalizeRole = (role: string) => role === 'responsable_louange' ? 'conduc
 // Reverse: convert back to API format before saving
 const toApiRole = (role: string) => role === 'conducteur_louange' ? 'responsable_louange' : role;
 
-const roleLabel = (r: string) => normalizeRole(r)?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Membre';
+const ROLE_LABELS: Record<string, string> = {
+  conducteur_louange: 'Conducteur Louange',
+  responsable_louange: 'Conducteur Louange',
+  responsable_technique: 'Responsable Technique',
+  pasteur: 'Pasteur',
+  choriste: 'Choriste',
+  pianiste: 'Pianiste',
+  batteur: 'Batteur',
+  guitariste_electrique: 'Guitariste Électrique',
+  guitariste_acoustique: 'Guitariste Acoustique',
+  bassiste: 'Bassiste',
+  sonorisateur: 'Sonorisateur',
+  projectionniste: 'Projectionniste',
+  videaste: 'Vidéaste',
+  dev: 'Développeur',
+};
+const roleLabel = (r: string) => ROLE_LABELS[normalizeRole(r) ?? r] ?? normalizeRole(r)?.replace(/_/g, ' ') ?? 'Membre';
 
 const ROLE_COLORS: Record<string, string> = {
   pasteur: 'bg-destructive/10 text-destructive',
