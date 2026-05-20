@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { getAllAccounts, updateMember, createMember, deleteMember, resetMemberPassword } from '@/lib/api';
+import { generateSecurePassword } from '@/lib/security';
 import {
   Search, Shield, Key, X, Check, Plus, Trash2, Copy, Eye, EyeOff,
   UserCheck, UserX, Download, Upload, ChevronUp, ChevronDown,
@@ -76,10 +77,8 @@ function getInitials(u: Account) {
   return `${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase() || '?';
 }
 
-function generatePassword(length = 12): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
+// Alias sécurisé — utilise crypto.getRandomValues() via security.ts
+const generatePassword = (length = 14) => generateSecurePassword(length);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

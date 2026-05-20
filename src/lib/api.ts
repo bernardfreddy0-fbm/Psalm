@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin } from './supabase';
+import { generateSecurePassword } from './security';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ export const createMember = async (data: { first_name: string; last_name: string
   // Create auth user via Supabase Admin SDK
   const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email: data.email,
-    password: Math.random().toString(36).slice(-12) + 'Aa1!', // temporary password
+    password: generateSecurePassword(16), // mot de passe temporaire cryptographiquement sûr
     email_confirm: true,
   });
   if (authErr) throw new Error(authErr.message);

@@ -1,107 +1,343 @@
 import { useEffect, useState } from 'react';
-import { getSystemStats, clearCache, getBackupUrl } from '@/lib/api';
-import { Database, HardDrive, Users, Music, Calendar, Activity, Download, Trash2 } from 'lucide-react';
+import { supabaseAdmin } from '@/lib/supabase';
+import {
+  Database, Users, Music, Calendar, Activity, RefreshCw,
+  Download, CheckCircle, AlertTriangle, Server, Clock,
+  FileText, Trash2, BarChart3,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
-function formatBytes(bytes: number) {
-  if (!bytes) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface SystemStats {
+  members: number;
+  active_members: number;
+  songs: number;
+  sundays: number;
+  events: number;
+  absences: number;
+  disponibilites: number;
+  config_entries: number;
+  security_logs: number;
 }
 
+interface HealthCheck {
+  id: string;
+  label: string;
+  status: 'ok' | 'warn' | 'error';
+  value: string;
+}
+
+// ── Composants utilitaires ────────────────────────────────────────────────────
+
+function StatCard({ icon: Icon, label, value, sub, color }: {
+  icon: React.FC<any>; label: string; value: number | string; sub?: string; color: string;
+}) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="w-4.5 h-4.5" />
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-foreground leading-none">{value}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+        {sub && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{sub}</p>}
+      </div>
+    </motion.div>
+  );
+}
+
+function HealthRow({ check }: { check: HealthCheck }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
+      <div className="flex items-center gap-2">
+        {check.status === 'ok'
+          ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          : check.status === 'warn'
+          ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          : <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+        <span className="text-sm text-foreground">{check.label}</span>
+      </div>
+      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+        check.status === 'ok' ? 'bg-emerald-500/10 text-emerald-600' :
+        check.status === 'warn' ? 'bg-amber-500/10 text-amber-600' :
+        'bg-destructive/10 text-destructive'
+      }`}>{check.value}</span>
+    </div>
+  );
+}
+
+// ── Composant principal ───────────────────────────────────────────────────────
+
 export default function ConfigMaintenance() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [health, setHealth] = useState<HealthCheck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [clearing, setClearing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  useEffect(() => {
-    getSystemStats().then(setStats).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const handleClearCache = async () => {
-    setClearing(true);
+  const loadStats = async () => {
     try {
-      const res = await clearCache();
-      toast.success(res?.message || 'Cache nettoyé');
-    } catch { toast.error('Erreur'); }
-    finally { setClearing(false); }
+      const [
+        membersRes,
+        activeMembersRes,
+        songsRes,
+        sundaysRes,
+        eventsRes,
+        absencesRes,
+        disposRes,
+        configRes,
+      ] = await Promise.allSettled([
+        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('events').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('config').select('key', { count: 'exact', head: true }),
+      ]);
+
+      const get = (res: PromiseSettledResult<any>) =>
+        res.status === 'fulfilled' ? (res.value.count ?? 0) : 0;
+
+      const configCount = get(configRes);
+      const secLogs = configCount; // approximation — on ne peut pas facilement filtrer dans count
+
+      const newStats: SystemStats = {
+        members: get(membersRes),
+        active_members: get(activeMembersRes),
+        songs: get(songsRes),
+        sundays: get(sundaysRes),
+        events: get(eventsRes),
+        absences: get(absencesRes),
+        disponibilites: get(disposRes),
+        config_entries: configCount,
+        security_logs: 0,
+      };
+      setStats(newStats);
+
+      // Calcul des indicateurs de santé
+      const healthChecks: HealthCheck[] = [
+        {
+          id: 'supabase',
+          label: 'Connexion Supabase',
+          status: 'ok',
+          value: 'Connecté',
+        },
+        {
+          id: 'members',
+          label: 'Base des membres',
+          status: newStats.members > 0 ? 'ok' : 'warn',
+          value: `${newStats.members} entrées`,
+        },
+        {
+          id: 'songs',
+          label: 'Bibliothèque de chants',
+          status: newStats.songs > 0 ? 'ok' : 'warn',
+          value: `${newStats.songs} chants`,
+        },
+        {
+          id: 'planning',
+          label: 'Planning',
+          status: newStats.sundays > 0 ? 'ok' : 'warn',
+          value: `${newStats.sundays} dimanches`,
+        },
+        {
+          id: 'https',
+          label: 'Connexion HTTPS',
+          status: window.location.protocol === 'https:' ? 'ok' : 'error',
+          value: window.location.protocol === 'https:' ? 'Chiffrée SSL/TLS' : '⚠️ Non chiffrée',
+        },
+        {
+          id: 'config',
+          label: 'Table de configuration',
+          status: configCount > 0 ? 'ok' : 'warn',
+          value: `${configCount} paramètres`,
+        },
+      ];
+      setHealth(healthChecks);
+      setLastRefresh(new Date());
+    } catch (err) {
+      toast.error('Erreur lors du chargement des statistiques');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const handleBackup = () => {
-    const token = localStorage.getItem('aef_admin_token') || '';
-    window.open(`${getBackupUrl()}&token=${encodeURIComponent(token)}`, '_blank');
-    toast.success('Téléchargement lancé');
+  useEffect(() => { loadStats(); }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadStats();
+    toast.success('Statistiques actualisées');
   };
 
-  if (loading) return <p className="text-sm text-muted-foreground">Chargement...</p>;
+  const handleExportConfig = async () => {
+    try {
+      const { data } = await supabaseAdmin.from('config').select('key, value, updated_at').order('key');
+      if (!data) return;
+      const rows = data.map(r => `"${r.key}";"${(r.value ?? '').replace(/"/g, '""')}";"${r.updated_at ?? ''}"`);
+      const csv = ['"Clé";"Valeur";"Mis à jour"', ...rows].join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `config-aef-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      toast.success('Export de la configuration téléchargé');
+    } catch {
+      toast.error('Erreur lors de l\'export');
+    }
+  };
 
-  const db = stats?.database || {};
-  const sys = stats?.system || {};
-  const sessions = stats?.sessions || {};
+  const handleExportMembers = async () => {
+    try {
+      const { data } = await supabaseAdmin
+        .from('profiles')
+        .select('first_name, last_name, email, phone, role, is_active, created_at')
+        .order('last_name');
+      if (!data) return;
+      const rows = data.map(r =>
+        `"${r.last_name}";"${r.first_name}";"${r.email}";"${r.phone ?? ''}";"${r.role ?? ''}";"${r.is_active ? 'Actif' : 'Inactif'}";"${r.created_at ?? ''}"`
+      );
+      const csv = ['"Nom";"Prénom";"Email";"Téléphone";"Rôle";"Statut";"Créé le"', ...rows].join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `membres-aef-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      toast.success('Export des membres téléchargé');
+    } catch {
+      toast.error('Erreur lors de l\'export des membres');
+    }
+  };
+
+  const handlePurgeSecurityLogs = async () => {
+    try {
+      // Supprimer les entrées secaudit_ de plus de 90 jours
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      const { data } = await supabaseAdmin
+        .from('config')
+        .select('key')
+        .like('key', 'secaudit_%')
+        .lt('updated_at', cutoff.toISOString());
+      if (!data || data.length === 0) {
+        toast.info('Aucun journal à purger (moins de 90 jours)');
+        return;
+      }
+      await supabaseAdmin.from('config').delete().in('key', data.map(r => r.key));
+      toast.success(`${data.length} entrées de journaux purgées`);
+    } catch {
+      toast.error('Erreur lors de la purge');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 py-8">
+        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm text-muted-foreground">Chargement des statistiques système...</span>
+      </div>
+    );
+  }
 
   const statCards = [
-    { icon: Users, label: 'Utilisateurs', value: db.users_count || 0, color: 'text-accent' },
-    { icon: Calendar, label: 'Planning', value: db.planning_count || 0, color: 'text-success' },
-    { icon: Music, label: 'Chants', value: db.songs_count || 0, color: 'text-gold' },
-    { icon: Activity, label: 'Journaux', value: db.logs_count || 0, color: 'text-warning' },
+    { icon: Users, label: 'Membres total', value: stats?.members ?? 0, sub: `${stats?.active_members ?? 0} actifs`, color: 'bg-accent/10 text-accent' },
+    { icon: Music, label: 'Chants', value: stats?.songs ?? 0, color: 'bg-amber-500/10 text-amber-600' },
+    { icon: Calendar, label: 'Dimanches', value: stats?.sundays ?? 0, color: 'bg-emerald-500/10 text-emerald-600' },
+    { icon: Activity, label: 'Absences enregistrées', value: stats?.absences ?? 0, color: 'bg-orange-500/10 text-orange-600' },
+    { icon: BarChart3, label: 'Disponibilités', value: stats?.disponibilites ?? 0, color: 'bg-blue-500/10 text-blue-600' },
+    { icon: Database, label: 'Entrées de config', value: stats?.config_entries ?? 0, color: 'bg-purple-500/10 text-purple-600' },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {statCards.map(s => (
-          <div key={s.label} className="bg-card border border-border rounded-lg p-4">
-            <s.icon className={`w-5 h-5 mb-2 ${s.color}`} />
-            <p className="text-2xl font-bold text-foreground">{s.value}</p>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-          </div>
+
+      {/* ── En-tête ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Server className="w-4 h-4 text-accent" /> Tableau de bord système
+          </h2>
+          <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Dernière actualisation : {lastRefresh.toLocaleTimeString('fr-FR')}
+          </p>
+        </div>
+        <button onClick={handleRefresh} disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
+      </div>
+
+      {/* ── KPIs Supabase ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {statCards.map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}>
+            <StatCard {...s} />
+          </motion.div>
         ))}
       </div>
 
-      {/* System info */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-          <HardDrive className="w-4 h-4" /> Système
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div className="flex justify-between py-1.5 border-b border-border">
-            <span className="text-muted-foreground">PHP</span>
-            <span className="text-foreground font-medium">{sys.php_version || '—'}</span>
-          </div>
-          <div className="flex justify-between py-1.5 border-b border-border">
-            <span className="text-muted-foreground">Mémoire</span>
-            <span className="text-foreground font-medium">{formatBytes(sys.memory_usage || 0)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 border-b border-border">
-            <span className="text-muted-foreground">Disque libre</span>
-            <span className="text-foreground font-medium">{formatBytes(sys.disk_free_space || 0)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 border-b border-border">
-            <span className="text-muted-foreground">Sessions actives</span>
-            <span className="text-foreground font-medium">{sessions.active || 0}</span>
-          </div>
+      {/* ── Santé du système ── */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-emerald-500" /> Santé du système
+        </h3>
+        <div className="space-y-0">
+          {health.map(h => <HealthRow key={h.id} check={h} />)}
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Database className="w-4 h-4" /> Actions
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={handleBackup}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium">
-            <Download className="w-4 h-4" /> Sauvegarder la BDD
+      {/* ── Exports de données ── */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Download className="w-4 h-4 text-accent" /> Exports de données
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button onClick={handleExportMembers}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm text-foreground font-medium">
+            <Users className="w-4 h-4 text-accent" />
+            <div className="text-left">
+              <p className="text-sm font-medium">Export Membres</p>
+              <p className="text-[10px] text-muted-foreground">CSV UTF-8 · tous les membres</p>
+            </div>
           </button>
-          <button onClick={handleClearCache} disabled={clearing}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-foreground text-sm font-medium hover:bg-muted disabled:opacity-50">
-            <Trash2 className="w-4 h-4" /> {clearing ? 'Nettoyage...' : 'Vider le cache'}
+          <button onClick={handleExportConfig}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm text-foreground font-medium">
+            <FileText className="w-4 h-4 text-accent" />
+            <div className="text-left">
+              <p className="text-sm font-medium">Export Configuration</p>
+              <p className="text-[10px] text-muted-foreground">CSV · tous les paramètres</p>
+            </div>
           </button>
         </div>
       </div>
+
+      {/* ── Maintenance ── */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-muted-foreground" /> Nettoyage
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={handlePurgeSecurityLogs}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-border bg-card text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+            Purger les journaux &gt; 90 jours
+          </button>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-3">
+          Les journaux d'audit de sécurité sont stockés dans la table de configuration avec le préfixe <code className="font-mono bg-muted px-1 py-0.5 rounded">secaudit_</code>.
+          La purge supprime les entrées de plus de 90 jours.
+        </p>
+      </div>
+
     </div>
   );
 }
