@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getPlanning, getSpecialEvents, createSpecialEvent, deleteSpecialEvent, loadPrograms, type SpecialEvent } from '@/lib/api';
 import { CalendarRange, ChevronLeft, ChevronRight, Plus, X, RefreshCw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const DAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -92,7 +93,7 @@ export default function EvenementsPage() {
     }).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, [currentYear]);
+  useEffect(() => { loadData(); }, [currentYear, currentMonth]);
 
   // Build a map: date → list of items (sundays + special events + programme du culte)
   const dateMap = useMemo(() => {
@@ -207,7 +208,7 @@ export default function EvenementsPage() {
       setNewEventForm(emptyForm);
       loadData();
     } catch {
-      alert('Erreur lors de la création de l\'événement');
+      toast.error('Erreur', { description: 'Erreur lors de la création de l\'événement' });
     } finally {
       setSaving(false);
     }
@@ -219,7 +220,7 @@ export default function EvenementsPage() {
       await deleteSpecialEvent(id);
       loadData();
     } catch {
-      alert('Erreur lors de la suppression');
+      toast.error('Erreur', { description: 'Erreur lors de la suppression' });
     }
   };
 

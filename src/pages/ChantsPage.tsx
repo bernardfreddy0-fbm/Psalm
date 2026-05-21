@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { getSongs, createSong, updateSong, deleteSong, uploadPartition, deletePartition, getSongFolders, type AdminSong } from '@/lib/api';
 import { Music, Trash2, Search, Pen, X, Check, Link, FileText, Volume2, Folder } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,26 +34,34 @@ export default function ChantsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createSong(form as any);
-    setForm(emptyForm);
-    setShowForm(false);
-    load();
+    try {
+      await createSong(form as any);
+      setForm(emptyForm);
+      setShowForm(false);
+      load();
+    } catch (err) {
+      toast.error('Erreur lors de la création', { description: (err as Error).message });
+    }
   };
 
   const handleUpdate = async () => {
     if (!editing) return;
-    await updateSong(editing.id, {
-      title: editing.title || '',
-      author: editing.author || '',
-      key: editing.key || '',
-      tempo: editing.tempo || '',
-      tags: editing.tags || '',
-      link: editing.link || '',
-      audio_url: editing.audio_url || '',
-      folder: editing.folder || '',
-    });
-    setEditing(null);
-    load();
+    try {
+      await updateSong(editing.id, {
+        title: editing.title || '',
+        author: editing.author || '',
+        key: editing.key || '',
+        tempo: editing.tempo || '',
+        tags: editing.tags || '',
+        link: editing.link || '',
+        audio_url: editing.audio_url || '',
+        folder: editing.folder || '',
+      });
+      setEditing(null);
+      load();
+    } catch (err) {
+      toast.error('Erreur lors de la mise à jour', { description: (err as Error).message });
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -188,7 +197,7 @@ export default function ChantsPage() {
                   <p className="text-xs font-medium text-foreground">Partition PDF</p>
                   {editing.partition_url ? (
                     <div className="flex items-center gap-2">
-                      <a href={`${API_BASE}/${editing.partition_url}`} target="_blank" rel="noreferrer"
+                      <a href={editing.partition_url!} target="_blank" rel="noreferrer"
                         className="flex items-center gap-1 text-xs text-accent hover:underline">
                         <FileText className="w-3.5 h-3.5" /> Voir la partition
                       </a>
@@ -250,7 +259,7 @@ export default function ChantsPage() {
               )) : <span className="text-xs text-muted-foreground">—</span>}</div>
               <div className="col-span-3 flex items-center justify-center gap-1">
                 {s.partition_url && (
-                  <a href={`${API_BASE}/${s.partition_url}`} target="_blank" rel="noreferrer"
+                  <a href={s.partition_url} target="_blank" rel="noreferrer"
                     className="p-1 rounded text-green-600 hover:bg-green-50" title="Voir partition"><FileText className="w-3.5 h-3.5" /></a>
                 )}
                 {s.audio_url && (

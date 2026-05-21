@@ -87,7 +87,7 @@ export default function LoginPage() {
       // Toujours afficher "lien envoyé" même si l'email n'existe pas
       // (prévention de l'énumération des comptes)
       await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/admin/reset-password`,
       });
       setResetSent(true);
       setError('');

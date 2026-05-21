@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getPermissions, savePermissions } from '@/lib/api';
 import { Save, RotateCcw, Info } from 'lucide-react';
 
@@ -68,7 +68,8 @@ export default function PermissionsPage() {
   const [savedOk, setSavedOk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadPermissions = () => {
+    setLoading(true);
     getPermissions().then(data => {
       // API returns { action → [roles] }, convert to { role → [actions] }
       const perms = data.permissions || {};
@@ -80,11 +81,17 @@ export default function PermissionsPage() {
         });
       });
       setMatrix(roleMap);
+      setChanged(false);
     }).catch(() => {
       const defaults: Record<string, string[]> = {};
       PERM_ROLES.forEach(r => { defaults[r.role] = r.level <= 2 ? [...allActions] : []; });
       setMatrix(defaults);
+      setChanged(false);
     }).finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadPermissions();
   }, []);
 
   const toggle = (role: string, action: string) => {
@@ -206,9 +213,9 @@ export default function PermissionsPage() {
           </thead>
           <tbody>
             {PERM_ACTIONS.map(group => (
-              <>
+              <React.Fragment key={group.group}>
                 {/* Group header */}
-                <tr key={group.group} className="bg-muted/30">
+                <tr className="bg-muted/30">
                   <td colSpan={PERM_ROLES.length + 1} className="px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-y border-border">
                     {group.group}
                   </td>
@@ -248,7 +255,7 @@ export default function PermissionsPage() {
                     </tr>
                   );
                 })}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -274,7 +281,7 @@ export default function PermissionsPage() {
         <div className="mt-4 flex items-center justify-between px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl">
           <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">⚠ Modifications non sauvegardées</p>
           <div className="flex gap-2">
-            <button onClick={() => window.location.reload()} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <button onClick={loadPermissions} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
               <RotateCcw size={12}/> Annuler
             </button>
             <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">

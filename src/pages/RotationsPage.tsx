@@ -394,7 +394,7 @@ export default function RotationsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">{r.details}</p>
                     <button
-                      onClick={() => navigate('/cultes')}
+                      onClick={() => navigate('/planning')}
                       className="mt-2 text-[11px] text-accent hover:underline font-medium transition-colors">
                       → Voir le planning
                     </button>
@@ -417,7 +417,7 @@ export default function RotationsPage() {
                     <span className="text-foreground truncate flex-1">{p.name}</span>
                     <span className="text-[9px] text-muted-foreground">{p.role ? p.role.replace(/_/g, ' ') : '—'}</span>
                     <button
-                      onClick={() => navigate('/cultes')}
+                      onClick={() => navigate('/planning')}
                       className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors flex-shrink-0">
                       + Assigner
                     </button>

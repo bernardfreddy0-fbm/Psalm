@@ -157,7 +157,7 @@ export default function DashboardPage() {
     },
     {
       value: sundays.length, label: 'Cultes planifiés', icon: CalendarRange,
-      color: 'text-amber-500', bg: 'bg-amber-500/10', to: '/cultes',
+      color: 'text-amber-500', bg: 'bg-amber-500/10', to: '/planning',
     },
     {
       value: activeParticipants, label: 'Bénévoles actifs', icon: Heart,
@@ -250,7 +250,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <button onClick={() => navigate('/cultes')}
+          <button onClick={() => navigate('/planning')}
             className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/12 border border-white/15 text-white text-xs font-medium hover:bg-white/20 transition-colors">
             Gérer <ArrowRight className="w-3 h-3" />
           </button>
@@ -265,7 +265,7 @@ export default function DashboardPage() {
           <span>
             <strong>{formatDateLong(alertSunday.date)}</strong> — {!alertSunday.dirigeant ? 'Pas de dirigeant.' : ''}{!alertSunday.son ? ' Pas de sono.' : ''}
             {' '}
-            <button onClick={() => navigate('/cultes')} className="underline font-semibold">Compléter →</button>
+            <button onClick={() => navigate('/planning')} className="underline font-semibold">Compléter →</button>
           </span>
         </motion.div>
       )}
@@ -306,7 +306,7 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
               📅 Prochains cultes
             </h2>
-            <button onClick={() => navigate('/cultes')} className="text-xs text-accent font-medium hover:underline">
+            <button onClick={() => navigate('/planning')} className="text-xs text-accent font-medium hover:underline">
               Voir tout →
             </button>
           </div>
@@ -322,7 +322,7 @@ export default function DashboardPage() {
                 return (
                   <motion.div key={s.id}
                     initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}
-                    onClick={() => navigate('/cultes')}
+                    onClick={() => navigate('/planning')}
                     className="flex items-center gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
 
                     {/* Date */}
@@ -414,7 +414,7 @@ export default function DashboardPage() {
             <div className="p-2">
               {[
                 { label: 'Programme du culte', desc: 'Ordre du service', emoji: '📋', to: '/programme', bg: 'bg-accent/10' },
-                { label: 'Planning Louange', desc: 'Assignations équipe', emoji: '🎵', to: '/cultes', bg: 'bg-amber-500/10' },
+                { label: 'Planning Louange', desc: 'Assignations équipe', emoji: '🎵', to: '/planning', bg: 'bg-amber-500/10' },
                 { label: 'Bibliothèque', desc: `${songs.length} chants`, emoji: '🎼', to: '/chants', bg: 'bg-blue-500/10' },
                 { label: 'Membres', desc: `${members.length} membres`, emoji: '👥', to: '/membres', bg: 'bg-emerald-500/10' },
               ].map(item => (
