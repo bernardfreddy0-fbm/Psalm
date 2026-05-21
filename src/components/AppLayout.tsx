@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Users, Repeat,
   Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText,
-  CalendarCheck, Video, BookOpen,
+  CalendarCheck, Video, BookOpen, ShieldCheck,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -47,8 +47,7 @@ const navSections = [
   {
     label: 'ADMIN',
     items: [
-      { to: '/comptes', icon: UserCog, label: 'Comptes' },
-      { to: '/permissions', icon: Key, label: 'Permissions' },
+      { to: '/acces', icon: ShieldCheck, label: 'Accès & Identités' },
       { to: '/journal', icon: ScrollText, label: 'Journal' },
       { to: '/configuration', icon: Settings, label: 'Configuration' },
     ],
@@ -64,6 +63,7 @@ const pageTitles: Record<string, string> = {
   '/evenements': 'Événements',
   '/programme': 'Programme du culte',
   '/rotations': 'Rotations & Participation',
+  '/acces': 'Accès & Identités',
   '/comptes': 'Gestion des comptes',
   '/permissions': 'Permissions',
   '/journal': 'Journal d\'activité',

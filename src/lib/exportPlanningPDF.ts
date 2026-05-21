@@ -45,9 +45,9 @@ function buildMusicRows(s: Sunday): MusicRow[] {
   return rows;
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
+// ── Build doc (partagé entre export et share) ─────────────────────────────────
 
-export function exportPlanningPDF(sundays: Sunday[], monthIndex: number, year: number) {
+function buildDoc(sundays: Sunday[], monthIndex: number, year: number): jsPDF {
   const monthName = MONTHS[monthIndex].toUpperCase();
   const doc    = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW  = doc.internal.pageSize.getWidth();   // 297
@@ -238,5 +238,45 @@ export function exportPlanningPDF(sundays: Sunday[], monthIndex: number, year: n
     { align: 'center' },
   );
 
+  return doc;
+}
+
+// ── Export téléchargement ─────────────────────────────────────────────────────
+
+export function exportPlanningPDF(sundays: Sunday[], monthIndex: number, year: number): void {
+  const doc = buildDoc(sundays, monthIndex, year);
   doc.save(`planning-${MONTHS[monthIndex].toLowerCase()}-${year}.pdf`);
+}
+
+// ── Partage Web Share API (mobile) + fallback téléchargement ─────────────────
+
+export async function sharePlanningPDF(
+  sundays: Sunday[],
+  monthIndex: number,
+  year: number,
+): Promise<'shared' | 'downloaded' | 'error'> {
+  try {
+    const doc      = buildDoc(sundays, monthIndex, year);
+    const monthName = MONTHS[monthIndex];
+    const filename  = `planning-${monthName.toLowerCase()}-${year}.pdf`;
+    const blob      = doc.output('blob');
+    const file      = new File([blob], filename, { type: 'application/pdf' });
+
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title:  `Planning Louange — ${monthName} ${year}`,
+        text:   `Planning équipe Louange AEF — ${monthName} ${year}`,
+      });
+      return 'shared';
+    }
+
+    // Fallback : téléchargement classique
+    doc.save(filename);
+    return 'downloaded';
+  } catch (err: any) {
+    // L'utilisateur a annulé le partage — ne pas traiter comme erreur
+    if (err?.name === 'AbortError') return 'downloaded';
+    return 'error';
+  }
 }

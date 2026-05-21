@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { exportPlanningPDF } from '@/lib/exportPlanningPDF';
+import { exportPlanningPDF, sharePlanningPDF } from '@/lib/exportPlanningPDF';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getFullPlanning,
@@ -15,7 +15,7 @@ import { fetchYoutubeVideos, type YoutubeVideo } from '@/lib/youtube';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Calendar, CalendarDays, BarChart3, Settings,
-  Search, Loader2, ShieldAlert, FileSpreadsheet, RefreshCw,
+  Search, Loader2, ShieldAlert, FileSpreadsheet, RefreshCw, Share2,
 } from 'lucide-react';
 import {
   type MemberOption,
@@ -148,6 +148,16 @@ export default function PlanningGestionPage() {
     exportPlanningPDF(scope, selectedMonth, selectedYear);
   }, [allSundays, monthSundays, viewTab, selectedMonth, selectedYear]);
 
+  const [sharing, setSharing] = useState(false);
+  const handleShare = useCallback(async () => {
+    const scope = (viewTab === 'month' ? monthSundays : allSundays) as Sunday[];
+    if (scope.length === 0) return;
+    setSharing(true);
+    const result = await sharePlanningPDF(scope, selectedMonth, selectedYear);
+    setSharing(false);
+    if (result === 'error') toast.error('Erreur de partage');
+  }, [allSundays, monthSundays, viewTab, selectedMonth, selectedYear]);
+
   const handleGenerate = () => {
     if (monthSundays.length === 0) return;
     let sundaysToProcess = monthSundays as Sunday[];
@@ -243,6 +253,15 @@ export default function PlanningGestionPage() {
               </button>
             </>
           )}
+          <button
+            onClick={handleShare}
+            disabled={sharing || (viewTab === 'month' ? monthSundays : allSundays).length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-600/40 bg-green-600/10 text-green-600 dark:text-green-400 text-xs font-medium active:bg-green-600/20 transition-colors disabled:opacity-40 touch-manipulation"
+          >
+            {sharing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Partager</span>
+            <span className="sm:hidden">WhatsApp</span>
+          </button>
           <button
             onClick={handleExport}
             disabled={(viewTab === 'month' ? monthSundays : allSundays).length === 0}
