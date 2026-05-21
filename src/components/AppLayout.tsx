@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  LayoutDashboard, FileText, CalendarRange, Church, Users, Repeat,
+  LayoutDashboard, FileText, CalendarRange, Users, Repeat,
   Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText,
   CalendarCheck, Video, BookOpen,
 } from 'lucide-react';
@@ -20,7 +20,7 @@ const navSections = [
     label: 'PLANNING',
     items: [
       { to: '/evenements', icon: CalendarRange, label: 'Événements' },
-      { to: '/cultes', icon: Church, label: 'Cultes' },
+      { to: '/planning', icon: CalendarRange, label: 'Gestion Planning' },
       { to: '/disponibilites', icon: CalendarCheck, label: 'Disponibilités' },
     ],
   },
@@ -60,7 +60,7 @@ const pageTitles: Record<string, string> = {
   '/': 'Espace Gestionnaire',
   '/membres': 'Membres',
   '/chants': 'Bibliothèque de Chants',
-  '/cultes': 'Planning Louange',
+  '/planning': 'Gestion Planning',
   '/evenements': 'Événements',
   '/programme': 'Programme du culte',
   '/rotations': 'Rotations & Participation',

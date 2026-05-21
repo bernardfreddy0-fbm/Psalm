@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
-import PlanningPage from "@/pages/PlanningPage";
+import PlanningGestionPage from "@/pages/PlanningGestionPage";
 import ProgrammePage from "@/pages/ProgrammePage";
 import EvenementsPage from "@/pages/EvenementsPage";
 import RotationsPage from "@/pages/RotationsPage";
@@ -49,7 +49,7 @@ function AppRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/programme" element={<ProgrammePage />} />
         <Route path="/evenements" element={<EvenementsPage />} />
-        <Route path="/cultes" element={<Guard action="planning_view"><PlanningPage /></Guard>} />
+        <Route path="/planning" element={<Guard action="planning_edit"><PlanningGestionPage /></Guard>} />
         <Route path="/membres" element={<Guard action="members_view"><MembresPage /></Guard>} />
         <Route path="/rotations" element={<Guard action="planning_edit"><RotationsPage /></Guard>} />
         <Route path="/chants" element={<Guard action="songs_view"><ChantsPage /></Guard>} />

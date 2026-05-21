@@ -933,3 +933,172 @@ export async function deleteSermon(id: string): Promise<void> {
   const { error } = await supabaseAdmin.from('config').delete().eq('key', id);
   if (error) throw new Error(error.message);
 }
+
+// ── Member type (utilisé par planning gestion) ────────────────────────────────
+
+export interface Member {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email?: string;
+  phone?: string;
+  instrument?: string;
+  is_active?: boolean;
+}
+
+// ── Planning Gestion (module partagé PsalmMembre ↔ PsalmAdmin) ───────────────
+
+export interface SundayPerson {
+  user_id: string;
+  pole: string;
+  first_name: string;
+  last_name: string;
+  confirmed?: string | null;
+}
+
+export interface Sunday {
+  id: string;
+  date: string;
+  label?: string;
+  title?: string;
+  dirigeant?: string;
+  dir_first?: string;
+  dir_last?: string;
+  dirigeant_id?: string | null;
+  dir_id?: string | null;
+  note?: string | null;
+  is_jeunesse?: boolean;
+  is_locked?: boolean;
+  assignments?: Record<string, SundayPerson[]>;
+}
+
+export interface AbsenceWithMember {
+  id: string;
+  date_start: string;
+  date_end: string;
+  reason?: string;
+  created_at?: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+}
+
+export const getFullPlanning = async (): Promise<Sunday[]> => {
+  const { data, error } = await supabaseAdmin
+    .from('sundays')
+    .select(`
+      id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, is_locked,
+      dir_profile:profiles!sundays_dirigeant_id_fkey(first_name, last_name),
+      sunday_assignments(
+        user_id, pole, confirmed, instrument,
+        profiles(first_name, last_name)
+      )
+    `)
+    .order('date');
+  throwIfError(data, error);
+
+  return (data || []).map((s: any) => {
+    const assignments: Record<string, SundayPerson[]> = {};
+    for (const a of s.sunday_assignments || []) {
+      if (!assignments[a.pole]) assignments[a.pole] = [];
+      assignments[a.pole].push({
+        user_id: a.user_id,
+        pole: a.pole,
+        first_name: a.profiles?.first_name || '',
+        last_name: a.profiles?.last_name || '',
+        confirmed: a.confirmed === null ? null : a.confirmed ? '1' : '0',
+      });
+    }
+    return {
+      id: String(s.id),
+      date: s.date,
+      label: s.label,
+      is_jeunesse: s.is_jeunesse,
+      dirigeant_id: s.dirigeant_id,
+      dir_id: s.dirigeant_id,
+      dir_first: s.dir_profile?.first_name || '',
+      dir_last: s.dir_profile?.last_name || '',
+      dirigeant: s.dirigeant,
+      note: s.note,
+      is_locked: s.is_locked,
+      assignments,
+    };
+  });
+};
+
+export const getMembersForPlanning = () => getMembers();
+
+// Guard anti-double-clic
+const _savingIds = new Set<string>();
+
+export async function assignSunday(
+  sundayId: string,
+  data: {
+    dirigeant_id?: string | null;
+    note?: string | null;
+    poles: Record<string, string[]>;
+  }
+): Promise<void> {
+  if (_savingIds.has(sundayId)) return;
+  _savingIds.add(sundayId);
+  try {
+    const numId = Number(sundayId);
+
+    const { error: sErr } = await supabaseAdmin.from('sundays').update({
+      dirigeant_id: data.dirigeant_id || null,
+      note: data.note || null,
+    }).eq('id', numId);
+    if (sErr) throw new Error(sErr.message);
+
+    const seen = new Set<string>();
+    const rows: { sunday_id: number; user_id: string; pole: string }[] = [];
+    for (const [pole, userIds] of Object.entries(data.poles)) {
+      for (const uid of userIds) {
+        const s = String(uid);
+        if (s && !seen.has(s)) { seen.add(s); rows.push({ sunday_id: numId, user_id: s, pole }); }
+      }
+    }
+
+    const { error: delErr } = await supabaseAdmin
+      .from('sunday_assignments')
+      .delete()
+      .eq('sunday_id', numId);
+    if (delErr) throw new Error(delErr.message);
+
+    if (rows.length > 0) {
+      const { error: insErr } = await supabaseAdmin
+        .from('sunday_assignments')
+        .insert(rows);
+      if (insErr) throw new Error(insErr.message);
+    }
+  } finally {
+    _savingIds.delete(sundayId);
+  }
+}
+
+export const getAllAbsences = async (): Promise<AbsenceWithMember[]> => {
+  const { data, error } = await supabaseAdmin
+    .from('absences')
+    .select('id, date_start, date_end, reason, created_at, user_id, profiles(first_name, last_name)')
+    .order('date_start', { ascending: false });
+  throwIfError(data, error);
+  return (data || []).map((a: any) => ({
+    id: String(a.id),
+    date_start: a.date_start,
+    date_end: a.date_end,
+    reason: a.reason,
+    created_at: a.created_at,
+    user_id: a.user_id,
+    first_name: a.profiles?.first_name || '',
+    last_name: a.profiles?.last_name || '',
+  }));
+};
+
+export function getAbsentMemberIds(absences: AbsenceWithMember[], date: string): Set<string> {
+  return new Set(
+    absences
+      .filter(a => a.date_start <= date && a.date_end >= date)
+      .map(a => String(a.user_id))
+  );
+}
