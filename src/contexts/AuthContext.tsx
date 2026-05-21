@@ -59,11 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await logout();
         return;
       }
-      // Vérification Supabase Auth (token révoqué côté serveur)
+      // Vérification du token JWT (token expiré ou révoqué côté serveur)
       try {
         const u = await checkAuth();
         if (!u) {
-          console.info('[Security] Session Supabase invalide — déconnexion automatique');
+          console.info('[Security] Session invalide — déconnexion automatique');
           await logout();
         }
       } catch {

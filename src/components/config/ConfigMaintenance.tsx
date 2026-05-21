@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabaseAdmin } from '@/lib/supabase';
+import { request } from '@/lib/apiClient';
 import {
   Database, Users, Music, Calendar, Activity, RefreshCw,
   Download, CheckCircle, AlertTriangle, Server, Clock,
@@ -80,40 +80,31 @@ export default function ConfigMaintenance() {
 
   const loadStats = async () => {
     try {
-      const [
-        membersRes,
-        activeMembersRes,
-        songsRes,
-        sundaysRes,
-        eventsRes,
-        absencesRes,
-        disposRes,
-        configRes,
-      ] = await Promise.allSettled([
-        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('events').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('config').select('key', { count: 'exact', head: true }),
+      const [membersRes, songsRes, eventsRes, absencesRes, configRes] = await Promise.allSettled([
+        request<any[]>('GET', '/members'),
+        request<any[]>('GET', '/songs'),
+        request<any[]>('GET', '/events'),
+        request<any[]>('GET', '/absences'),
+        request<Record<string, string>>('GET', '/config'),
       ]);
 
-      const get = (res: PromiseSettledResult<any>) =>
-        res.status === 'fulfilled' ? (res.value.count ?? 0) : 0;
+      const members = membersRes.status === 'fulfilled' ? membersRes.value : [];
+      const songs   = songsRes.status === 'fulfilled' ? songsRes.value : [];
+      const events  = eventsRes.status === 'fulfilled' ? eventsRes.value : [];
+      const absences = absencesRes.status === 'fulfilled' ? absencesRes.value : [];
+      const config  = configRes.status === 'fulfilled' ? configRes.value : {};
 
-      const configCount = get(configRes);
-      const secLogs = configCount; // approximation — on ne peut pas facilement filtrer dans count
+      const activeMembers = members.filter((m: any) => m.is_active && m.first_name !== '[Supprimé]').length;
+      const configCount = Object.keys(config).length;
 
       const newStats: SystemStats = {
-        members: get(membersRes),
-        active_members: get(activeMembersRes),
-        songs: get(songsRes),
-        sundays: get(sundaysRes),
-        events: get(eventsRes),
-        absences: get(absencesRes),
-        disponibilites: get(disposRes),
+        members: members.length,
+        active_members: activeMembers,
+        songs: songs.length,
+        sundays: 0,
+        events: events.length,
+        absences: absences.length,
+        disponibilites: 0,
         config_entries: configCount,
         security_logs: 0,
       };
@@ -122,10 +113,10 @@ export default function ConfigMaintenance() {
       // Calcul des indicateurs de santé
       const healthChecks: HealthCheck[] = [
         {
-          id: 'supabase',
-          label: 'Connexion Supabase',
-          status: 'ok',
-          value: 'Connecté',
+          id: 'api',
+          label: 'Connexion API',
+          status: membersRes.status === 'fulfilled' ? 'ok' : 'error',
+          value: membersRes.status === 'fulfilled' ? 'Connectée' : 'Erreur',
         },
         {
           id: 'members',
@@ -138,12 +129,6 @@ export default function ConfigMaintenance() {
           label: 'Bibliothèque de chants',
           status: newStats.songs > 0 ? 'ok' : 'warn',
           value: `${newStats.songs} chants`,
-        },
-        {
-          id: 'planning',
-          label: 'Planning',
-          status: newStats.sundays > 0 ? 'ok' : 'warn',
-          value: `${newStats.sundays} dimanches`,
         },
         {
           id: 'https',
@@ -178,10 +163,10 @@ export default function ConfigMaintenance() {
 
   const handleExportConfig = async () => {
     try {
-      const { data } = await supabaseAdmin.from('config').select('key, value, updated_at').order('key');
-      if (!data) return;
-      const rows = data.map(r => `"${r.key}";"${(r.value ?? '').replace(/"/g, '""')}";"${r.updated_at ?? ''}"`);
-      const csv = ['"Clé";"Valeur";"Mis à jour"', ...rows].join('\n');
+      const data = await request<Record<string, string>>('GET', '/config');
+      const rows = Object.entries(data).sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `"${key}";"${(value ?? '').replace(/"/g, '""')}"`);
+      const csv = ['"Clé";"Valeur"', ...rows].join('\n');
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -195,13 +180,10 @@ export default function ConfigMaintenance() {
 
   const handleExportMembers = async () => {
     try {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('first_name, last_name, email, phone, role, is_active, created_at')
-        .order('last_name');
-      if (!data) return;
-      const rows = data.map(r =>
-        `"${r.last_name}";"${r.first_name}";"${r.email}";"${r.phone ?? ''}";"${r.role ?? ''}";"${r.is_active ? 'Actif' : 'Inactif'}";"${r.created_at ?? ''}"`
+      const data = await request<any[]>('GET', '/members');
+      const sorted = [...data].sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''));
+      const rows = sorted.map(r =>
+        `"${r.last_name ?? ''}";"${r.first_name ?? ''}";"${r.email ?? ''}";"${r.phone ?? ''}";"${r.role ?? ''}";"${r.is_active ? 'Actif' : 'Inactif'}";"${r.created_at ?? ''}"`
       );
       const csv = ['"Nom";"Prénom";"Email";"Téléphone";"Rôle";"Statut";"Créé le"', ...rows].join('\n');
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -217,20 +199,14 @@ export default function ConfigMaintenance() {
 
   const handlePurgeSecurityLogs = async () => {
     try {
-      // Supprimer les entrées secaudit_ de plus de 90 jours
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 90);
-      const { data } = await supabaseAdmin
-        .from('config')
-        .select('key')
-        .like('key', 'secaudit_%')
-        .lt('updated_at', cutoff.toISOString());
-      if (!data || data.length === 0) {
-        toast.info('Aucun journal à purger (moins de 90 jours)');
+      const allConfig = await request<Record<string, string>>('GET', '/config');
+      const secKeys = Object.keys(allConfig).filter(k => k.startsWith('secaudit_'));
+      if (secKeys.length === 0) {
+        toast.info('Aucun journal à purger');
         return;
       }
-      await supabaseAdmin.from('config').delete().in('key', data.map(r => r.key));
-      toast.success(`${data.length} entrées de journaux purgées`);
+      await Promise.all(secKeys.map(k => request('DELETE', `/config/${encodeURIComponent(k)}`)));
+      toast.success(`${secKeys.length} entrées de journaux purgées`);
     } catch {
       toast.error('Erreur lors de la purge');
     }

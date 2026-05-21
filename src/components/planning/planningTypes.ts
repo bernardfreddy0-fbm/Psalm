@@ -1,5 +1,5 @@
 import { type Sunday } from '@/lib/api';
-import { supabaseAdmin as supabase } from '@/lib/supabase';
+import { request } from '@/lib/apiClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,9 +125,5 @@ export function getInitials(name: string) {
 }
 
 export async function lockSunday(sundayId: string, locked: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('sundays')
-    .update({ is_locked: locked })
-    .eq('id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await request('PUT', `/planning/sunday/${sundayId}`, { is_locked: locked });
 }

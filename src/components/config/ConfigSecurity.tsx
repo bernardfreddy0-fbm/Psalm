@@ -121,8 +121,8 @@ const AUDIT_CHECKS: AuditCheck[] = [
   {
     id: 'env_vars',
     label: 'Variables d\'environnement',
-    desc: 'Clés Supabase chargées depuis les variables d\'env',
-    check: () => !!import.meta.env.VITE_SUPABASE_SERVICE_KEY,
+    desc: 'URL de l\'API chargée depuis les variables d\'env',
+    check: () => !!import.meta.env.VITE_API_URL,
     severity: 'critical',
   },
   {

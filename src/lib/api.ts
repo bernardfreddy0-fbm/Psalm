@@ -1,13 +1,7 @@
-import { supabase, supabaseAdmin } from './supabase';
+import { request, requestFormData } from './apiClient';
 import { generateSecurePassword } from './security';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function throwIfError<T>(data: T | null, error: { message: string } | null): T {
-  if (error) throw new Error(error.message);
-  if (data === null) throw new Error('Aucune donnée');
-  return data;
-}
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   responsable_louange: 'conducteur_louange',
@@ -30,223 +24,161 @@ function normalizeMember(member: any) {
   return { ...member, role: normalizeRoleCsv(member?.role) };
 }
 
+function parseRoles(roles: string | null | undefined): string[] {
+  if (!roles) return [];
+  const s = roles.trim();
+  if (s.startsWith('{') && s.endsWith('}')) {
+    return s.slice(1, -1).split(',').filter(Boolean).map(r => r.trim().replace(/^"(.*)"$/, '$1'));
+  }
+  if (s.startsWith('[')) {
+    try { return JSON.parse(s); } catch {}
+  }
+  return s.split(',').filter(Boolean).map(r => r.trim());
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export function setToken(_token: string) { /* géré par Supabase */ }
-export function clearToken() { supabase.auth.signOut(); }
+export function setToken(_token: string) { /* géré par apiClient */ }
+export function clearToken() {
+  const rt = localStorage.getItem('aef_refresh_token');
+  if (rt) request('POST', '/auth/logout', { refresh_token: rt }).catch(() => {});
+  localStorage.removeItem('aef_token');
+  localStorage.removeItem('aef_refresh_token');
+}
 
-function translateSupabaseError(msg: string): string {
+function translateHonoError(msg: string): string {
   const map: Record<string, string> = {
-    'Invalid login credentials': 'Identifiants incorrects',
-    'Email not confirmed': 'Email non confirmé — vérifiez votre boîte mail',
-    'User not found': 'Aucun compte associé à cet email',
-    'Too many requests': 'Trop de tentatives — réessayez dans quelques minutes',
-    'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères',
-    'User already registered': 'Un compte existe déjà avec cet email',
-    'Unable to validate email address': 'Adresse email invalide',
-    'Signup is disabled': 'Les inscriptions sont désactivées',
+    'Identifiants incorrects': 'Identifiants incorrects',
+    'Compte désactivé': 'Compte désactivé — contactez un administrateur',
+    'Compte non migré': 'Compte non migré — contactez l\'admin',
+    'Email et mot de passe requis': 'Email et mot de passe requis',
+    'Session expirée': 'Session expirée — veuillez vous reconnecter',
   };
-  for (const [en, fr] of Object.entries(map)) {
-    if (msg.includes(en)) return fr;
+  for (const [key, fr] of Object.entries(map)) {
+    if (msg.includes(key)) return fr;
   }
   return msg;
 }
 
 export async function login(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(translateSupabaseError(error.message));
+  try {
+    const data = await request<{
+      access_token: string;
+      refresh_token: string;
+      user: { id: string; first_name: string; last_name: string; email: string; role: string | null };
+    }>('POST', '/auth/login', { email, password });
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, role, phone')
-    .eq('id', data.user.id)
-    .single();
+    localStorage.setItem('aef_token', data.access_token);
+    localStorage.setItem('aef_refresh_token', data.refresh_token);
 
-  return profile;
+    return {
+      ...data.user,
+      role: normalizeRoleCsv(data.user.role),
+    };
+  } catch (e: any) {
+    const raw = e?.message ?? '';
+    let msg = raw;
+    try { msg = JSON.parse(raw)?.error ?? raw; } catch {}
+    throw new Error(translateHonoError(msg));
+  }
 }
 
 export async function checkAuth() {
+  const token = localStorage.getItem('aef_token');
+  if (!token) return null;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, email, role, phone')
-      .eq('id', session.user.id)
-      .single();
-    return profile;
+    const profile = await request<any>('GET', '/auth/me');
+    return profile ? normalizeMember(profile) : null;
   } catch {
     return null;
   }
 }
 
 export async function logout() {
-  await supabase.auth.signOut();
+  const rt = localStorage.getItem('aef_refresh_token');
+  try {
+    if (rt) await request('POST', '/auth/logout', { refresh_token: rt });
+  } catch {}
+  localStorage.removeItem('aef_token');
+  localStorage.removeItem('aef_refresh_token');
 }
 
 // ── Members ───────────────────────────────────────────────────────────────────
 
-export const getMembers = () =>
-  supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color')
-    .order('last_name')
-    .then(({ data, error }) => {
-      throwIfError(data, error);
-      return (data || []).filter(isActiveMember).map(normalizeMember);
-    });
-
-// Version complète pour la gestion DSI (inclut created_at + tous les inactifs)
-export const getAllAccounts = async () => {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color, created_at, updated_at')
-    .neq('first_name', '[Supprimé]')
-    .order('last_name');
-  throwIfError(data, error);
-  return (data || []).map(normalizeMember);
+export const getMembers = async () => {
+  const data = await request<any[]>('GET', '/members');
+  return data.filter(isActiveMember).map(normalizeMember);
 };
 
-export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string; password?: string }) => {
-  // Utilise le mot de passe fourni (affiché à l'admin) ou en génère un aléatoire
+export const getAllAccounts = async () => {
+  const data = await request<any[]>('GET', '/members');
+  return data.filter(m => m.first_name !== '[Supprimé]').map(normalizeMember);
+};
+
+export const createMember = async (data: {
+  first_name: string; last_name: string; email: string;
+  role: string; phone?: string; instrument?: string; password?: string;
+}) => {
   const passwordUsed = data.password ?? generateSecurePassword(16);
-
-  // Create auth user via Supabase Admin SDK
-  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-    email: data.email,
-    password: passwordUsed,
-    email_confirm: true,
-  });
-  if (authErr) throw new Error(authErr.message);
-  const userId = authData.user.id;
-
-  // Create profile row
-  const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
-    id: userId,
+  const result = await request<{ id: string; password: string }>('POST', '/members', {
     first_name: data.first_name,
     last_name: data.last_name,
     email: data.email,
     role: data.role,
     phone: data.phone || null,
     instrument: data.instrument || null,
-    is_active: true,
-    updated_at: new Date().toISOString(),
+    password: passwordUsed,
   });
-  if (profileErr) throw new Error(profileErr.message);
-  await logSecurityEvent('account_created', { target_email: data.email, role: data.role }).catch(() => {});
-  return { id: userId, password: passwordUsed };
+  return { id: result.id, password: result.password ?? passwordUsed };
 };
 
 export const updateMember = async (id: string, data: Record<string, any>) => {
-  const payload: any = { ...data, updated_at: new Date().toISOString() };
+  const payload: any = { ...data };
   if (data.is_active !== undefined) payload.is_active = data.is_active !== '0' && data.is_active !== false;
-  const { error } = await supabaseAdmin.from('profiles').update(payload).eq('id', id);
-  if (error) throw new Error(error.message);
+  await request('PUT', `/members/${id}`, payload);
   return { success: true };
 };
 
 export const updateMemberEmail = async (userId: string, newEmail: string) => {
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail });
-  if (error) throw new Error(error.message);
+  await request('PUT', `/members/${userId}/email`, { email: newEmail });
   return { success: true };
 };
 
-// ── Journal d'audit sécurité ──────────────────────────────────────────────────
-
-export async function logSecurityEvent(event: string, meta?: Record<string, any>) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const actor = session?.user?.email ?? 'system';
-    const key = `secaudit_${Date.now()}_${event}`;
-    await supabaseAdmin.from('config').insert({
-      key,
-      value: JSON.stringify({ event, actor, meta, ts: new Date().toISOString() }),
-      updated_at: new Date().toISOString(),
-    });
-  } catch {
-    // Log silencieux — ne jamais bloquer l'action principale
-    console.warn('[SECURITY AUDIT]', event, meta);
-  }
-}
-
 export const deleteMember = async (id: string) => {
-  // Étape 1 — Supprimer l'accès Auth Supabase (révoque immédiatement toute connexion)
-  const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(id);
-  if (authErr) throw new Error(authErr.message);
-
-  // Étape 2 — Anonymiser le profil (conformité RGPD, préserve l'historique des FK)
-  const { error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .update({
-      first_name: '[Supprimé]',
-      last_name: '',
-      email: `deleted_${id.slice(0, 8)}@supprime.local`,
-      phone: null,
-      is_active: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
-  if (profileErr) throw new Error(profileErr.message);
-
-  // Étape 3 — Journal d'audit (silencieux si table absente)
-  await logSecurityEvent('account_deleted', { target_id: id }).catch(() => {});
+  await request('DELETE', `/members/${id}`);
 };
 
 export const resetMemberPassword = async (userId: string, newPassword: string) => {
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
-  if (error) throw new Error(error.message);
-  await logSecurityEvent('password_reset', { target_id: userId }).catch(() => {});
+  await request('POST', `/members/${userId}/reset-password`, { password: newPassword });
   return { success: true };
 };
+
+export async function logSecurityEvent(event: string, meta?: Record<string, any>) {
+  console.warn('[SECURITY AUDIT]', event, meta);
+}
 
 // ── Planning / Sundays ───────────────────────────────────────────────────────
 
 export const getPlanning = async (year: number) => {
-  const { data, error } = await supabaseAdmin
-    .from('sundays')
-    .select(`
-      id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, pastor_note,
-      is_approved, is_locked, choristes, piano, batterie, guitare_elec,
-      guitare_acou, basse, son, projection, video, theme, start_time,
-      sunday_assignments(
-        user_id, pole, confirmed, instrument,
-        profiles(first_name, last_name, role)
-      )
-    `)
-    .gte('date', `${year}-01-01`)
-    .lte('date', `${year}-12-31`)
-    .order('date');
-  throwIfError(data, error);
-
-  return (data || []).map((s: any) => ({
+  const data = await request<any[]>('GET', `/planning/${year}`);
+  return data.map((s: any) => ({
     ...s,
     id: String(s.id),
-    assignments: s.sunday_assignments || [],
+    assignments: s.assignments || [],
   }));
 };
 
 export const createSunday = async (date: string, label: string) => {
-  const { data, error } = await supabaseAdmin
-    .from('sundays')
-    .insert({ date, label, updated_at: new Date().toISOString() })
-    .select('id')
-    .single();
-  throwIfError(data, error);
-  return data;
+  return request<{ id: string }>('POST', '/planning/sunday', { date, label });
 };
 
 export const updateSunday = async (id: string, data: Record<string, any>) => {
-  const { error } = await supabaseAdmin
-    .from('sundays')
-    .update({ ...data, updated_at: new Date().toISOString() })
-    .eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('PUT', `/planning/sunday/${id}`, data);
   return { success: true };
 };
 
 export const deleteSunday = async (id: string) => {
-  const { error } = await supabaseAdmin.from('sundays').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/planning/sunday/${id}`);
 };
 
 // ── Songs ─────────────────────────────────────────────────────────────────────
@@ -268,12 +200,8 @@ export interface AdminSong {
 }
 
 export const getSongs = async (): Promise<AdminSong[]> => {
-  const { data, error } = await supabaseAdmin
-    .from('songs')
-    .select('id, title, author, key_note, tempo, tags, youtube_url, lyrics, partition_url, audio_url, folder')
-    .order('title');
-  throwIfError(data, error);
-  return (data || []).map((s: any) => ({
+  const data = await request<any[]>('GET', '/songs');
+  return data.map((s: any) => ({
     ...s,
     id: String(s.id),
     key: s.key_note,
@@ -282,77 +210,63 @@ export const getSongs = async (): Promise<AdminSong[]> => {
 };
 
 export const getSongFolders = async (): Promise<string[]> => {
-  const { data } = await supabaseAdmin.from('songs').select('folder').not('folder', 'is', null);
-  return [...new Set((data || []).map((s: any) => s.folder).filter(Boolean))];
+  const data = await request<any[]>('GET', '/songs');
+  return [...new Set(data.map((s: any) => s.folder).filter(Boolean))];
 };
 
-export const createSong = async (data: { title: string; author?: string; key?: string; tempo?: string; tags?: string }) => {
-  const { error } = await supabaseAdmin.from('songs').insert({
+export const createSong = async (data: {
+  title: string; author?: string; key?: string; tempo?: string; tags?: string;
+}) => {
+  await request('POST', '/songs', {
     title: data.title,
     author: data.author || null,
     key_note: data.key || null,
     tempo: data.tempo || null,
     tags: data.tags || null,
   });
-  if (error) throw new Error(error.message);
 };
 
 export const updateSong = async (id: string, data: Record<string, any>) => {
   const payload: any = { ...data };
   if (data.key !== undefined) { payload.key_note = data.key; delete payload.key; }
   if (data.link !== undefined) { payload.youtube_url = data.link; delete payload.link; }
-  const { error } = await supabaseAdmin.from('songs').update(payload).eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('PUT', `/songs/${id}`, payload);
 };
 
 export const deleteSong = async (id: string) => {
-  const { error } = await supabaseAdmin.from('songs').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/songs/${id}`);
 };
 
 export const uploadPartition = async (songId: string, file: File): Promise<{ partition_url: string }> => {
-  const path = `partitions/${songId}/${file.name}`;
-  const { error } = await supabaseAdmin.storage.from('songs').upload(path, file, { upsert: true });
-  if (error) throw new Error(error.message);
-  const { data: url } = supabaseAdmin.storage.from('songs').getPublicUrl(path);
-  await supabaseAdmin.from('songs').update({ partition_url: url.publicUrl }).eq('id', Number(songId));
-  return { partition_url: url.publicUrl };
+  const formData = new FormData();
+  formData.append('file', file);
+  const result = await requestFormData<{ url: string }>('POST', `/songs/${songId}/partition`, formData);
+  return { partition_url: result.url };
 };
 
 export const deletePartition = async (songId: string) => {
-  const { error } = await supabaseAdmin.from('songs').update({ partition_url: null }).eq('id', Number(songId));
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/songs/${songId}/partition`);
 };
 
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 export const getPermissions = async (): Promise<{ permissions: Record<string, string[]> }> => {
-  const { data, error } = await supabaseAdmin
-    .from('permissions')
-    .select('permission_key, roles')
-    .eq('active', true);
-  throwIfError(data, error);
+  const data = await request<{ permission_key: string; roles: string }[]>('GET', '/permissions');
   const permissions: Record<string, string[]> = {};
-  for (const row of data!) permissions[row.permission_key] = row.roles as string[];
+  for (const row of data) {
+    permissions[row.permission_key] = parseRoles(row.roles);
+  }
   return { permissions };
 };
 
 export async function savePermissions(matrix: Record<string, string[]>) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Non connecté');
-
-  const rows = Object.entries(matrix).map(([permission_key, roles]) => ({
-    permission_key,
-    roles,
-    active: true,
-    updated_by: session.user.id,
-    updated_at: new Date().toISOString(),
-  }));
-
-  const { error } = await supabaseAdmin
-    .from('permissions')
-    .upsert(rows, { onConflict: 'permission_key' });
-  if (error) throw new Error(error.message);
+  const token = localStorage.getItem('aef_token');
+  if (!token) throw new Error('Non connecté');
+  const body: Record<string, string> = {};
+  for (const [key, roles] of Object.entries(matrix)) {
+    body[key] = roles.join(',');
+  }
+  await request('PUT', '/permissions', body);
   return { success: true };
 }
 
@@ -369,9 +283,8 @@ export interface SpecialEvent {
 }
 
 export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
-  const { data, error } = await supabaseAdmin.from('events').select('*').order('date');
-  throwIfError(data, error);
-  return (data || []).map((e: any) => ({
+  const data = await request<any[]>('GET', '/events');
+  return data.map((e: any) => ({
     id: String(e.id),
     title: e.title,
     date_start: e.date,
@@ -383,99 +296,92 @@ export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
 };
 
 export async function createSpecialEvent(data: Omit<SpecialEvent, 'id'>) {
-  const { error } = await supabaseAdmin.from('events').insert({
-    title: data.title,
+  await request('POST', '/events', {
     date: data.date_start,
+    title: data.title,
     end_date: data.date_end || null,
     type: data.type || null,
     description: data.description || null,
     location: data.location || null,
   });
-  if (error) throw new Error(error.message);
   return { success: true };
 }
 
 export async function updateSpecialEvent(id: string, data: Partial<SpecialEvent>) {
-  const { error } = await supabaseAdmin.from('events').update({
-    title: data.title,
+  await request('PUT', `/events/${id}`, {
     date: data.date_start,
+    title: data.title,
     end_date: data.date_end || null,
     type: data.type || null,
     description: data.description || null,
     location: data.location || null,
-  }).eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  });
   return { success: true };
 }
 
 export const deleteSpecialEvent = async (id: string) => {
-  const { error } = await supabaseAdmin.from('events').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/events/${id}`);
 };
 
 // ── Config / Settings ─────────────────────────────────────────────────────────
 
+export async function getSettings(): Promise<Record<string, string>> {
+  return request<Record<string, string>>('GET', '/config');
+}
+
+export async function saveSettings(settings: { key: string; value: string }[]) {
+  const body: Record<string, string> = {};
+  for (const s of settings) body[s.key] = s.value;
+  await request('PUT', '/config', body);
+  return { success: true };
+}
+
 export async function getSettingsByCategory(category: string): Promise<any[]> {
-  const { data, error } = await supabaseAdmin
-    .from('config')
-    .select('key, value')
-    .like('key', `${category}_%`);
-  throwIfError(data, error);
-  return (data || []).map(r => ({ key_name: r.key.replace(`${category}_`, ''), value: r.value }));
+  const all = await request<Record<string, string>>('GET', '/config');
+  const prefix = `${category}_`;
+  return Object.entries(all)
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, value]) => ({ key_name: key.replace(prefix, ''), value }));
 }
 
 export async function getAllSettings(): Promise<Record<string, any[]>> {
-  const { data } = await supabaseAdmin.from('config').select('key, value');
+  const all = await request<Record<string, string>>('GET', '/config');
   const result: Record<string, any[]> = {};
-  for (const row of data || []) {
-    const [cat, ...rest] = row.key.split('_');
+  for (const [key, value] of Object.entries(all)) {
+    const [cat, ...rest] = key.split('_');
     if (!result[cat]) result[cat] = [];
-    result[cat].push({ key_name: rest.join('_'), value: row.value });
+    result[cat].push({ key_name: rest.join('_'), value });
   }
   return result;
 }
 
 export async function saveSetting(category: string, key: string, value: any) {
   const fullKey = `${category}_${key}`;
-  const { error } = await supabaseAdmin.from('config').upsert(
-    { key: fullKey, value: typeof value === 'string' ? value : JSON.stringify(value), updated_at: new Date().toISOString() },
-    { onConflict: 'key' }
-  );
-  if (error) throw new Error(error.message);
+  const strVal = typeof value === 'string' ? value : JSON.stringify(value);
+  await request('PUT', `/config/${fullKey}`, { value: strVal });
   return { success: true };
 }
 
 export async function saveSettingsBulk(settings: { category: string; key: string; value: any }[]) {
-  const rows = settings.map(s => ({
-    key: `${s.category}_${s.key}`,
-    value: typeof s.value === 'string' ? s.value : JSON.stringify(s.value),
-    updated_at: new Date().toISOString(),
-  }));
-  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
-  return { success: true };
-}
-
-export async function getSettings(): Promise<Record<string, string>> {
-  const { data, error } = await supabaseAdmin.from('config').select('key, value');
-  throwIfError(data, error);
-  return Object.fromEntries((data || []).map(r => [r.key, r.value]));
-}
-
-export async function saveSettings(settings: { key: string; value: string }[]) {
-  const rows = settings.map(s => ({ key: s.key, value: s.value, updated_at: new Date().toISOString() }));
-  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
+  const body: Record<string, string> = {};
+  for (const s of settings) {
+    body[`${s.category}_${s.key}`] = typeof s.value === 'string' ? s.value : JSON.stringify(s.value);
+  }
+  await request('PUT', '/config', body);
   return { success: true };
 }
 
 export async function getSystemStats() {
-  const [members, songs, sundays] = await Promise.all([
-    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
+  const [members, songs, planning] = await Promise.all([
+    request<any[]>('GET', '/members'),
+    request<any[]>('GET', '/songs'),
+    request<any[]>('GET', `/planning/${new Date().getFullYear()}`),
   ]);
-  return { members: members.count, songs: songs.count, sundays: sundays.count };
+  return {
+    members: members.filter(isActiveMember).length,
+    songs: songs.length,
+    sundays: planning.length,
+  };
 }
 
 export async function clearCache() { return { success: true }; }
@@ -484,17 +390,15 @@ export function getBackupUrl(): string { return ''; }
 // ── Programme du culte ────────────────────────────────────────────────────────
 
 export async function saveProgram(date: string, data: object) {
-  const { error } = await supabaseAdmin.from('config').upsert(
-    { key: `programme_${date}`, value: JSON.stringify(data), updated_at: new Date().toISOString() },
-    { onConflict: 'key' }
-  );
-  if (error) throw new Error(error.message);
+  await request('PUT', `/config/programme_${date}`, { value: JSON.stringify(data) });
   return { success: true };
 }
 
 export async function loadPrograms(): Promise<Array<{ key_name: string; value: string }>> {
-  const { data } = await supabaseAdmin.from('config').select('key, value').like('key', 'programme_%');
-  return (data || []).map(r => ({ key_name: r.key.replace('programme_', ''), value: r.value }));
+  const all = await request<Record<string, string>>('GET', '/config');
+  return Object.entries(all)
+    .filter(([key]) => key.startsWith('programme_'))
+    .map(([key, value]) => ({ key_name: key.replace('programme_', ''), value }));
 }
 
 // ── Runsheet ──────────────────────────────────────────────────────────────────
@@ -517,48 +421,40 @@ export interface RunsheetData {
 }
 
 export async function getRunsheet(sundayId: string): Promise<RunsheetData> {
-  const { data, error } = await supabaseAdmin
-    .from('sunday_runsheet')
-    .select('*')
-    .eq('sunday_id', Number(sundayId))
-    .order('position');
-  throwIfError(data, error);
-  const { data: sunday } = await supabaseAdmin.from('sundays').select('start_time').eq('id', Number(sundayId)).single();
+  const data = await request<{ items: any[]; start_time: string }>('GET', `/runsheet/${sundayId}`);
   return {
-    items: (data || []).map((r: any) => ({ ...r, id: String(r.id), song_id: r.song_id ? String(r.song_id) : null })),
-    start_time: sunday?.start_time || '10:00',
+    items: (data.items || []).map((r: any) => ({
+      ...r,
+      id: String(r.id),
+      song_id: r.song_id ? String(r.song_id) : null,
+    })),
+    start_time: data.start_time || '10:00',
   };
 }
 
 export async function saveRunsheet(sundayId: string, items: RunsheetItem[]): Promise<void> {
-  await supabaseAdmin.from('sunday_runsheet').delete().eq('sunday_id', Number(sundayId));
-  if (items.length === 0) return;
-  const { error } = await supabaseAdmin.from('sunday_runsheet').insert(
-    items.map((item, i) => ({
-      sunday_id: Number(sundayId),
+  await request('POST', `/runsheet/${sundayId}`, {
+    items: items.map((item, i) => ({
       position: item.position ?? i,
       type: item.type,
       title: item.title,
       duration_min: item.duration_min,
       notes: item.notes || null,
-      song_id: item.song_id ? Number(item.song_id) : null,
+      song_id: item.song_id || null,
       is_published: item.is_published ?? false,
-    }))
-  );
-  if (error) throw new Error(error.message);
+    })),
+  });
 }
 
 export async function publishRunsheet(sundayId: string, published: boolean): Promise<void> {
-  const { error } = await supabaseAdmin.from('sunday_runsheet').update({ is_published: published }).eq('sunday_id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await request('PATCH', `/runsheet/${sundayId}/publish`, { published });
 }
 
 export async function updateRunsheetStartTime(sundayId: string, startTime: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('sundays').update({ start_time: startTime }).eq('id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await request('PUT', `/planning/sunday/${sundayId}`, { start_time: startTime });
 }
 
-// ── Activity logs (journal d'activité) ────────────────────────────────────────
+// ── Activity logs ─────────────────────────────────────────────────────────────
 
 export interface ActivityLog {
   id: string;
@@ -575,157 +471,15 @@ export async function getActivityLogs(params?: {
   offset?: number;
   type?: string;
 }): Promise<{ data: ActivityLog[]; items: ActivityLog[]; total: number }> {
-  const limit = params?.limit ?? 20;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 60);
-  const cutoffStr = cutoff.toISOString();
-  const logs: ActivityLog[] = [];
-
-  const [absencesRes, disposRes, profilesRes, sundaysRes, songsRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('absences')
-      .select('id, user_id, date_start, created_at, profiles(first_name, last_name)')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(40),
-
-    supabaseAdmin
-      .from('disponibilites')
-      .select('id, user_id, sunday_id, available, responded_at, profiles(first_name, last_name)')
-      .gte('responded_at', cutoffStr)
-      .order('responded_at', { ascending: false })
-      .limit(40),
-
-    supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, role, created_at')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(20),
-
-    supabaseAdmin
-      .from('sundays')
-      .select('id, date, label, updated_at')
-      .gte('updated_at', cutoffStr)
-      .order('updated_at', { ascending: false })
-      .limit(20),
-
-    supabaseAdmin
-      .from('songs')
-      .select('id, title, author, created_at')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(15),
-  ]);
-
-  if (absencesRes.status === 'fulfilled' && absencesRes.value.data) {
-    for (const a of absencesRes.value.data) {
-      const profile = a.profiles as any;
-      const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
-      const dateStr = a.date_start
-        ? new Date(a.date_start + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-        : undefined;
-      logs.push({
-        id: `abs_${a.id}`,
-        type: 'absence',
-        action: 'absence_declared',
-        description: `${name} a déclaré une absence`,
-        user_name: name,
-        detail: dateStr,
-        created_at: a.created_at,
-      });
-    }
-  }
-
-  if (disposRes.status === 'fulfilled' && disposRes.value.data) {
-    for (const d of disposRes.value.data) {
-      const profile = d.profiles as any;
-      const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
-      const statusLabel = d.available ? 'disponible' : 'indisponible';
-      logs.push({
-        id: `dispo_${d.id}`,
-        type: 'dispo',
-        action: 'dispo_updated',
-        description: `${name} s'est marqué ${statusLabel}`,
-        user_name: name,
-        detail: undefined,
-        created_at: d.responded_at,
-      });
-    }
-  }
-
-  if (profilesRes.status === 'fulfilled' && profilesRes.value.data) {
-    for (const p of profilesRes.value.data) {
-      const name = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-      if (!name) continue;
-      logs.push({
-        id: `profile_${p.id}`,
-        type: 'member',
-        action: 'member_created',
-        description: `Nouveau membre : ${name}`,
-        user_name: name,
-        detail: p.role ? p.role.split(',')[0].replace(/_/g, ' ') : 'Membre',
-        created_at: p.created_at,
-      });
-    }
-  }
-
-  if (sundaysRes.status === 'fulfilled' && sundaysRes.value.data) {
-    for (const s of sundaysRes.value.data) {
-      const dateStr = s.date
-        ? new Date(s.date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-        : undefined;
-      logs.push({
-        id: `sunday_${s.id}`,
-        type: 'planning',
-        action: 'planning_updated',
-        description: `Planning modifié : ${s.label || 'Culte'}`,
-        user_name: 'Administrateur',
-        detail: dateStr,
-        created_at: s.updated_at,
-      });
-    }
-  }
-
-  if (songsRes.status === 'fulfilled' && songsRes.value.data) {
-    for (const s of songsRes.value.data) {
-      logs.push({
-        id: `song_${s.id}`,
-        type: 'song',
-        action: 'song_created',
-        description: `Nouveau chant : ${s.title}`,
-        user_name: s.author || 'Inconnu',
-        detail: s.author || undefined,
-        created_at: s.created_at,
-      });
-    }
-  }
-
-  logs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-  const filtered = params?.type ? logs.filter(l => l.type === params.type) : logs;
-  const page = filtered.slice(params?.offset ?? 0, (params?.offset ?? 0) + limit);
-  return { data: page, items: page, total: filtered.length };
+  const qs = new URLSearchParams();
+  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.offset) qs.set('offset', String(params.offset));
+  if (params?.type) qs.set('type', params.type);
+  return request('GET', `/activity/logs${qs.size ? `?${qs}` : ''}`);
 }
 
 export async function getActivitySummary(days = 7): Promise<Record<string, number>> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = cutoff.toISOString();
-
-  const [absences, dispos, members, songs] = await Promise.allSettled([
-    supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }).gte('responded_at', cutoffStr),
-    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-  ]);
-
-  return {
-    absences: absences.status === 'fulfilled' ? absences.value.count ?? 0 : 0,
-    dispos:   dispos.status === 'fulfilled'   ? dispos.value.count   ?? 0 : 0,
-    members:  members.status === 'fulfilled'  ? members.value.count  ?? 0 : 0,
-    songs:    songs.status === 'fulfilled'    ? songs.value.count    ?? 0 : 0,
-  };
+  return request('GET', `/activity/summary?days=${days}`);
 }
 
 export async function getActivityActions() {
@@ -764,64 +518,11 @@ export interface SundayDispo {
 
 export async function getDisponibilitesAdmin(year?: number): Promise<SundayDispo[]> {
   const y = year ?? new Date().getFullYear();
-  const { data: sundays, error } = await supabaseAdmin
-    .from('sundays')
-    .select('id, date, label, is_jeunesse, dispo_deadline')
-    .gte('date', `${y}-01-01`)
-    .lte('date', `${y}-12-31`)
-    .order('date');
-  if (error) throw new Error(error.message);
-
-  const { data: dispos } = await supabaseAdmin
-    .from('disponibilites')
-    .select('sunday_id, user_id, available, note, responded_at, profiles(first_name, last_name, role)')
-    .in('sunday_id', (sundays || []).map((s: any) => s.id));
-
-  const { data: members } = await supabaseAdmin
-    .from('profiles')
-    .select('id', { count: 'exact', head: false })
-    .eq('is_active', true)
-    .not('first_name', 'eq', '[Supprimé]');
-  const totalMembers = members?.length ?? 0;
-
-  const dispoMap = new Map<number, DispoEntry[]>();
-  for (const d of dispos || []) {
-    const p = d.profiles as any;
-    const entry: DispoEntry = {
-      user_id: d.user_id,
-      first_name: p?.first_name || '',
-      last_name: p?.last_name || '',
-      role: p?.role || '',
-      available: d.available,
-      note: d.note,
-      responded_at: d.responded_at,
-    };
-    if (!dispoMap.has(d.sunday_id)) dispoMap.set(d.sunday_id, []);
-    dispoMap.get(d.sunday_id)!.push(entry);
-  }
-
-  return (sundays || []).map((s: any) => {
-    const responses = dispoMap.get(s.id) || [];
-    return {
-      sunday_id: String(s.id),
-      date: s.date,
-      label: s.label,
-      is_jeunesse: s.is_jeunesse,
-      dispo_deadline: s.dispo_deadline,
-      responses,
-      total_members: totalMembers,
-      responded_count: responses.length,
-      available_count: responses.filter(r => r.available === true).length,
-    };
-  });
+  return request('GET', `/disponibilites/admin?year=${y}`);
 }
 
 export async function setDispoDeadline(sundayId: string, deadline: string | null): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('sundays')
-    .update({ dispo_deadline: deadline })
-    .eq('id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await request('PUT', `/planning/sunday/${sundayId}`, { dispo_deadline: deadline });
 }
 
 // ── Absences (vue admin) ──────────────────────────────────────────────────────
@@ -840,19 +541,13 @@ export interface AdminAbsence {
 
 export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
   const y = year ?? new Date().getFullYear();
-  const { data, error } = await supabaseAdmin
-    .from('absences')
-    .select('id, user_id, date_start, date_end, reason, created_at, profiles(first_name, last_name, role)')
-    .gte('date_start', `${y}-01-01`)
-    .lte('date_start', `${y}-12-31`)
-    .order('date_start', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data || []).map((a: any) => ({
+  const data = await request<any[]>('GET', `/absences?year=${y}`);
+  return data.map((a: any) => ({
     id: String(a.id),
     user_id: a.user_id,
-    first_name: a.profiles?.first_name || '',
-    last_name: a.profiles?.last_name || '',
-    role: a.profiles?.role || '',
+    first_name: a.first_name || '',
+    last_name: a.last_name || '',
+    role: a.role || '',
     date_start: a.date_start,
     date_end: a.date_end || null,
     reason: a.reason || null,
@@ -861,11 +556,10 @@ export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
 }
 
 export async function deleteAbsenceAdmin(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('absences').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/absences/${id}`);
 }
 
-// ── Archives vidéo (video_meta) ───────────────────────────────────────────────
+// ── Archives vidéo (non migré — stub) ─────────────────────────────────────────
 
 export interface VideoMetaSummary {
   video_id: string;
@@ -883,25 +577,10 @@ export interface VideoMetaSummary {
 }
 
 export async function getVideoMetaList(): Promise<VideoMetaSummary[]> {
-  const { data, error } = await supabaseAdmin
-    .from('video_meta')
-    .select('video_id, preacher, theme, tags, checklist, updated_at')
-    .order('updated_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data || []).map((r: any) => ({
-    video_id: r.video_id,
-    preacher: r.preacher ?? null,
-    theme: r.theme ?? null,
-    tags: Array.isArray(r.tags) ? r.tags : [],
-    checklist: r.checklist ?? { montage: false, subtitles: false, thumbnail: false, description_yt: false, published: false },
-    updated_at: r.updated_at ?? null,
-  }));
+  return [];
 }
 
-export async function deleteVideoMeta(videoId: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('video_meta').delete().eq('video_id', videoId);
-  if (error) throw new Error(error.message);
-}
+export async function deleteVideoMeta(_videoId: string): Promise<void> {}
 
 // ── Prédications / Sermons ────────────────────────────────────────────────────
 
@@ -917,33 +596,28 @@ export interface Sermon {
 }
 
 export async function getSermons(): Promise<Sermon[]> {
-  const { data, error } = await supabaseAdmin
-    .from('config')
-    .select('key, value')
-    .like('key', 'sermon_%')
-    .order('key', { ascending: false });
-  if (error) return [];
-  return (data || []).map((r: any) => {
-    try { return { id: r.key, ...JSON.parse(r.value) }; }
-    catch { return null; }
-  }).filter(Boolean) as Sermon[];
+  const all = await request<Record<string, string>>('GET', '/config');
+  return Object.entries(all)
+    .filter(([key]) => key.startsWith('sermon_'))
+    .map(([key, value]) => {
+      try { return { id: key, ...JSON.parse(value) }; }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => b.id.localeCompare(a.id)) as Sermon[];
 }
 
 export async function saveSermon(sermon: Sermon): Promise<void> {
   const key = sermon.id || `sermon_${sermon.date}_${Date.now()}`;
   const { id: _id, ...rest } = sermon;
-  const { error } = await supabaseAdmin
-    .from('config')
-    .upsert({ key, value: JSON.stringify(rest), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
+  await request('PUT', `/config/${key}`, { value: JSON.stringify(rest) });
 }
 
 export async function deleteSermon(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('config').delete().eq('key', id);
-  if (error) throw new Error(error.message);
+  await request('DELETE', `/config/${id}`);
 }
 
-// ── Member type (utilisé par planning gestion) ────────────────────────────────
+// ── Member type ───────────────────────────────────────────────────────────────
 
 export interface Member {
   id: string;
@@ -956,7 +630,7 @@ export interface Member {
   is_active?: boolean;
 }
 
-// ── Planning Gestion (module partagé PsalmMembre ↔ PsalmAdmin) ───────────────
+// ── Planning Gestion ──────────────────────────────────────────────────────────
 
 export interface SundayPerson {
   user_id: string;
@@ -994,34 +668,27 @@ export interface AbsenceWithMember {
 }
 
 export const getFullPlanning = async (year?: number): Promise<Sunday[]> => {
-  let query = supabaseAdmin
-    .from('sundays')
-    .select(`
-      id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, is_locked,
-      dir_profile:profiles!sundays_dirigeant_id_fkey(first_name, last_name),
-      sunday_assignments(
-        user_id, pole, confirmed, instrument,
-        profiles(first_name, last_name)
-      )
-    `);
-  if (year) {
-    query = query.gte('date', `${year}-01-01`).lte('date', `${year}-12-31`);
-  }
-  const { data, error } = await query.order('date');
-  throwIfError(data, error);
+  const [planningData, membersData] = await Promise.all([
+    request<any[]>('GET', year ? `/planning/${year}` : '/planning'),
+    request<any[]>('GET', '/members'),
+  ]);
 
-  return (data || []).map((s: any) => {
+  const memberMap = new Map<string, { first_name: string; last_name: string }>();
+  for (const m of membersData) memberMap.set(m.id, m);
+
+  return planningData.map((s: any) => {
     const assignments: Record<string, SundayPerson[]> = {};
-    for (const a of s.sunday_assignments || []) {
+    for (const a of s.assignments || []) {
       if (!assignments[a.pole]) assignments[a.pole] = [];
       assignments[a.pole].push({
         user_id: a.user_id,
         pole: a.pole,
         first_name: a.profiles?.first_name || '',
         last_name: a.profiles?.last_name || '',
-        confirmed: a.confirmed === null ? null : a.confirmed ? '1' : '0',
+        confirmed: a.confirmed ?? null,
       });
     }
+    const dirMember = s.dirigeant_id ? memberMap.get(s.dirigeant_id) : null;
     return {
       id: String(s.id),
       date: s.date,
@@ -1029,8 +696,8 @@ export const getFullPlanning = async (year?: number): Promise<Sunday[]> => {
       is_jeunesse: s.is_jeunesse,
       dirigeant_id: s.dirigeant_id,
       dir_id: s.dirigeant_id,
-      dir_first: s.dir_profile?.first_name || '',
-      dir_last: s.dir_profile?.last_name || '',
+      dir_first: dirMember?.first_name || '',
+      dir_last: dirMember?.last_name || '',
       dirigeant: s.dirigeant,
       note: s.note,
       is_locked: s.is_locked,
@@ -1055,55 +722,23 @@ export async function assignSunday(
   if (_savingIds.has(sundayId)) return;
   _savingIds.add(sundayId);
   try {
-    const numId = Number(sundayId);
-
-    const { error: sErr } = await supabaseAdmin.from('sundays').update({
-      dirigeant_id: data.dirigeant_id || null,
-      note: data.note || null,
-    }).eq('id', numId);
-    if (sErr) throw new Error(sErr.message);
-
-    const seen = new Set<string>();
-    const rows: { sunday_id: number; user_id: string; pole: string }[] = [];
-    for (const [pole, userIds] of Object.entries(data.poles)) {
-      for (const uid of userIds) {
-        const s = String(uid);
-        if (s && !seen.has(s)) { seen.add(s); rows.push({ sunday_id: numId, user_id: s, pole }); }
-      }
-    }
-
-    const { error: delErr } = await supabaseAdmin
-      .from('sunday_assignments')
-      .delete()
-      .eq('sunday_id', numId);
-    if (delErr) throw new Error(delErr.message);
-
-    if (rows.length > 0) {
-      const { error: insErr } = await supabaseAdmin
-        .from('sunday_assignments')
-        .insert(rows);
-      if (insErr) throw new Error(insErr.message);
-    }
+    await request('PUT', `/planning/sunday/${sundayId}/assign`, data);
   } finally {
     _savingIds.delete(sundayId);
   }
 }
 
 export const getAllAbsences = async (): Promise<AbsenceWithMember[]> => {
-  const { data, error } = await supabaseAdmin
-    .from('absences')
-    .select('id, date_start, date_end, reason, created_at, user_id, profiles(first_name, last_name)')
-    .order('date_start', { ascending: false });
-  throwIfError(data, error);
-  return (data || []).map((a: any) => ({
+  const data = await request<any[]>('GET', '/absences');
+  return data.map((a: any) => ({
     id: String(a.id),
     date_start: a.date_start,
     date_end: a.date_end,
     reason: a.reason,
     created_at: a.created_at,
     user_id: a.user_id,
-    first_name: a.profiles?.first_name || '',
-    last_name: a.profiles?.last_name || '',
+    first_name: a.first_name || '',
+    last_name: a.last_name || '',
   }));
 };
 
