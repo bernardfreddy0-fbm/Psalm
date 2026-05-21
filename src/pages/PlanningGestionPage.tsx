@@ -46,7 +46,7 @@ export default function PlanningGestionPage() {
   const qc = useQueryClient();
 
   const now = new Date();
-  const [selectedYear] = useState(now.getFullYear());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [viewTab, setViewTab] = useState<ViewTab>('month');
   const [search, setSearch] = useState('');
@@ -61,7 +61,7 @@ export default function PlanningGestionPage() {
 
   const { data: allSundays = [], isLoading } = useQuery({
     queryKey: ['full-planning', selectedYear],
-    queryFn: getFullPlanning,
+    queryFn: () => getFullPlanning(selectedYear),
     staleTime: 60000,
     enabled: isAdmin,
   });
@@ -223,9 +223,31 @@ export default function PlanningGestionPage() {
       {/* Header — empile sur mobile */}
       <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-base font-bold text-foreground flex items-center gap-2">
-            📋 Planning Louange {selectedYear}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-bold text-foreground flex items-center gap-2">
+              📋 Planning Louange
+            </h1>
+            {/* Sélecteur d'année */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setSelectedYear(y => y - 1)}
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground transition-colors text-xs font-bold"
+                aria-label="Année précédente"
+              >
+                ‹
+              </button>
+              <span className="text-base font-bold text-foreground min-w-[44px] text-center">
+                {selectedYear}
+              </span>
+              <button
+                onClick={() => setSelectedYear(y => y + 1)}
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground transition-colors text-xs font-bold"
+                aria-label="Année suivante"
+              >
+                ›
+              </button>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground">
             {(allSundays as Sunday[]).length} dimanches planifiés
           </p>
@@ -351,6 +373,7 @@ export default function PlanningGestionPage() {
               onLock={handleLock}
               lockingId={lockingId}
               onRefresh={() => qc.invalidateQueries({ queryKey: ['full-planning'] })}
+              onEdit={(edit) => setEditTarget(edit)}
             />
           )}
         </>

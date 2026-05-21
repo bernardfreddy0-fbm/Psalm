@@ -107,11 +107,14 @@ export const getAllAccounts = async () => {
   return (data || []).map(normalizeMember);
 };
 
-export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string }) => {
+export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string; password?: string }) => {
+  // Utilise le mot de passe fourni (affiché à l'admin) ou en génère un aléatoire
+  const passwordUsed = data.password ?? generateSecurePassword(16);
+
   // Create auth user via Supabase Admin SDK
   const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email: data.email,
-    password: generateSecurePassword(16), // mot de passe temporaire cryptographiquement sûr
+    password: passwordUsed,
     email_confirm: true,
   });
   if (authErr) throw new Error(authErr.message);
@@ -131,13 +134,19 @@ export const createMember = async (data: { first_name: string; last_name: string
   });
   if (profileErr) throw new Error(profileErr.message);
   await logSecurityEvent('account_created', { target_email: data.email, role: data.role }).catch(() => {});
-  return { id: userId };
+  return { id: userId, password: passwordUsed };
 };
 
 export const updateMember = async (id: string, data: Record<string, any>) => {
   const payload: any = { ...data, updated_at: new Date().toISOString() };
   if (data.is_active !== undefined) payload.is_active = data.is_active !== '0' && data.is_active !== false;
   const { error } = await supabaseAdmin.from('profiles').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
+  return { success: true };
+};
+
+export const updateMemberEmail = async (userId: string, newEmail: string) => {
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail });
   if (error) throw new Error(error.message);
   return { success: true };
 };
@@ -984,8 +993,8 @@ export interface AbsenceWithMember {
   last_name: string;
 }
 
-export const getFullPlanning = async (): Promise<Sunday[]> => {
-  const { data, error } = await supabaseAdmin
+export const getFullPlanning = async (year?: number): Promise<Sunday[]> => {
+  let query = supabaseAdmin
     .from('sundays')
     .select(`
       id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, is_locked,
@@ -994,8 +1003,11 @@ export const getFullPlanning = async (): Promise<Sunday[]> => {
         user_id, pole, confirmed, instrument,
         profiles(first_name, last_name)
       )
-    `)
-    .order('date');
+    `);
+  if (year) {
+    query = query.gte('date', `${year}-01-01`).lte('date', `${year}-12-31`);
+  }
+  const { data, error } = await query.order('date');
   throwIfError(data, error);
 
   return (data || []).map((s: any) => {

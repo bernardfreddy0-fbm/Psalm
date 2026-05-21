@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getAllAccounts, updateMember, createMember,
+  getAllAccounts, updateMember, updateMemberEmail, createMember,
   resetMemberPassword, getPermissions, savePermissions,
 } from '@/lib/api';
 import { generateSecurePassword } from '@/lib/security';
@@ -224,6 +224,17 @@ function MemberDetail({
     setSaving(true);
     try {
       await updateMember(user.id, { first_name: form.first_name, last_name: form.last_name, email: form.email, phone: form.phone, role: form.role });
+
+      // Synchroniser l'email Auth Supabase seulement si l'email a réellement changé
+      if (form.email !== user.email) {
+        try {
+          await updateMemberEmail(user.id, form.email);
+          toast.info("Email mis à jour — un email de confirmation a été envoyé à l'utilisateur");
+        } catch (authErr: any) {
+          toast.error('Erreur mise à jour email Auth', { description: authErr.message });
+        }
+      }
+
       toast.success('Membre mis à jour');
       onUpdated();
       setEditing(false);

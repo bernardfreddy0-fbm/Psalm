@@ -21,6 +21,7 @@ import ConfigurationPage from "@/pages/ConfigurationPage";
 import DisponibilitesPage from "@/pages/DisponibilitesPage";
 import ArchivesAdminPage from "@/pages/ArchivesAdminPage";
 import PredicationsPage from "@/pages/PredicationsPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -42,28 +43,37 @@ function Guard({ action, children }: { action: string; children: React.ReactNode
 function AppRoutes() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground text-sm">Chargement...</div></div>;
-  if (!user) return <LoginPage />;
 
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/programme" element={<ProgrammePage />} />
-        <Route path="/evenements" element={<EvenementsPage />} />
-        <Route path="/planning" element={<Guard action="planning_edit"><PlanningGestionPage /></Guard>} />
-        <Route path="/membres" element={<Guard action="members_view"><MembresPage /></Guard>} />
-        <Route path="/rotations" element={<Guard action="planning_edit"><RotationsPage /></Guard>} />
-        <Route path="/chants" element={<Guard action="songs_view"><ChantsPage /></Guard>} />
-        <Route path="/acces" element={<Guard action="members_manage"><AccesPage /></Guard>} />
-        <Route path="/comptes" element={<Guard action="members_manage"><ComptesPage /></Guard>} />
-        <Route path="/permissions" element={<Guard action="config_edit"><PermissionsPage /></Guard>} />
-        <Route path="/journal" element={<Guard action="config_edit"><JournalPage /></Guard>} />
-        <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />
-        <Route path="/disponibilites" element={<Guard action="planning_view"><DisponibilitesPage /></Guard>} />
-        <Route path="/archives" element={<Guard action="archives_view"><ArchivesAdminPage /></Guard>} />
-        <Route path="/predications" element={<Guard action="config_view"><PredicationsPage /></Guard>} />
-      </Route>
-      <Route path="*" element={<NotFound />} />
+      {/* Public route — always accessible, no auth required */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      {/* Auth gate — all other routes require being logged in */}
+      {!user ? (
+        <Route path="*" element={<LoginPage />} />
+      ) : (
+        <>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/programme" element={<ProgrammePage />} />
+            <Route path="/evenements" element={<EvenementsPage />} />
+            <Route path="/planning" element={<Guard action="planning_edit"><PlanningGestionPage /></Guard>} />
+            <Route path="/membres" element={<Guard action="members_view"><MembresPage /></Guard>} />
+            <Route path="/rotations" element={<Guard action="planning_edit"><RotationsPage /></Guard>} />
+            <Route path="/chants" element={<Guard action="songs_view"><ChantsPage /></Guard>} />
+            <Route path="/acces" element={<Guard action="members_manage"><AccesPage /></Guard>} />
+            <Route path="/comptes" element={<Guard action="members_manage"><ComptesPage /></Guard>} />
+            <Route path="/permissions" element={<Guard action="config_edit"><PermissionsPage /></Guard>} />
+            <Route path="/journal" element={<Guard action="config_edit"><JournalPage /></Guard>} />
+            <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />
+            <Route path="/disponibilites" element={<Guard action="planning_view"><DisponibilitesPage /></Guard>} />
+            <Route path="/archives" element={<Guard action="archives_view"><ArchivesAdminPage /></Guard>} />
+            <Route path="/predications" element={<Guard action="config_view"><PredicationsPage /></Guard>} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </>
+      )}
     </Routes>
   );
 }

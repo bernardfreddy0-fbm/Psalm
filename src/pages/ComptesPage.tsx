@@ -142,7 +142,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     e.preventDefault();
     setSaving(true);
     try {
-      await createMember({ ...form, phone: form.phone || undefined });
+      await createMember({ ...form, phone: form.phone || undefined, password: generatedPwd });
       toast.success(`Compte créé pour ${form.first_name} ${form.last_name}`);
       onCreated();
       onClose();

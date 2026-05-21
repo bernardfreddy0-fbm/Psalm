@@ -11,7 +11,7 @@ import {
   isPast,
 } from './planningTypes';
 import { shareOnWhatsApp } from './whatsapp';
-import { Lock, Unlock, X, Loader2, Check, Plus, Share2, CheckCircle2, PlaySquare } from 'lucide-react';
+import { Lock, Unlock, X, Loader2, Check, Plus, Share2, CheckCircle2, PlaySquare, Pencil } from 'lucide-react';
 import { findVideoForSunday, type YoutubeVideo } from '@/lib/youtube';
 import { YoutubeVideoModal } from '@/components/YoutubeVideoModal';
 
@@ -317,7 +317,7 @@ function MobileBottomSheet({ roleLabel, roleEmoji, dateLabel, available, absent,
 // ── Composant principal ───────────────────────────────────────────────────────
 
 export function MonthKanban({
-  sundays, members, absences, videos, onLock, lockingId, onRefresh,
+  sundays, members, absences, videos, onLock, lockingId, onRefresh, onEdit,
 }: {
   sundays: Sunday[];
   members: MemberOption[];
@@ -326,6 +326,7 @@ export function MonthKanban({
   onLock: (s: Sunday) => void;
   lockingId: string | null;
   onRefresh: () => void;
+  onEdit?: (edit: EditState) => void;
 }) {
   const [edits, setEdits]           = useState<Record<string, EditState>>({});
   const [dirty, setDirty]           = useState<Set<string>>(new Set());
@@ -557,6 +558,14 @@ export function MonthKanban({
             <CheckCircle2 size={8} /> {confirmed}/{total}
           </div>
         )}
+        {!isDirty && onEdit && (
+          <button
+            onClick={() => onEdit(edit ?? buildEditState(s))}
+            className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary touch-manipulation"
+          >
+            <Pencil size={8} /> Éditer
+          </button>
+        )}
         {!isDirty && s.dir_first && (
           <button
             onClick={() => shareOnWhatsApp(s)}
@@ -671,14 +680,26 @@ export function MonthKanban({
                     {saving.has(s.id) ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                     Sauvegarder
                   </button>
-                ) : s.dir_first ? (
-                  <button
-                    onClick={() => shareOnWhatsApp(s)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-[#25D366]/10 text-[#25D366] touch-manipulation"
-                  >
-                    <Share2 size={12} /> WhatsApp
-                  </button>
-                ) : null}
+                ) : (
+                  <>
+                    {onEdit && (
+                      <button
+                        onClick={() => { const e = getEdit(s.id); onEdit(e ?? buildEditState(s)); }}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-primary/10 text-primary touch-manipulation"
+                      >
+                        <Pencil size={12} /> Éditer
+                      </button>
+                    )}
+                    {s.dir_first && (
+                      <button
+                        onClick={() => shareOnWhatsApp(s)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-[#25D366]/10 text-[#25D366] touch-manipulation"
+                      >
+                        <Share2 size={12} /> WhatsApp
+                      </button>
+                    )}
+                  </>
+                )}
                 <button
                   onClick={() => onLock(s)}
                   disabled={lockingId === s.id}
