@@ -1,15 +1,15 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getAllAccounts, updateMember, createMember, deleteMember,
+  getAllAccounts, updateMember, createMember,
   resetMemberPassword, getPermissions, savePermissions,
 } from '@/lib/api';
 import { generateSecurePassword } from '@/lib/security';
 import {
-  Search, Shield, Key, Plus, Trash2, Copy, Eye, EyeOff,
-  Users, UserCog, Phone, Mail, Calendar, Filter,
+  Search, Shield, Key, Plus, Copy, Eye, EyeOff,
+  UserCog, Phone, Mail, Calendar,
   RefreshCw, Edit2, Lock, Unlock, Check, X, Save,
-  RotateCcw, ChevronRight, Info, ShieldAlert,
+  RotateCcw, ChevronRight, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -225,7 +225,6 @@ function MemberDetail({
     try {
       await updateMember(user.id, { first_name: form.first_name, last_name: form.last_name, email: form.email, phone: form.phone, role: form.role });
       toast.success('Membre mis à jour');
-      qc.invalidateQueries({ queryKey: ['all-accounts'] });
       onUpdated();
       setEditing(false);
     } catch (err: any) {
@@ -376,7 +375,12 @@ function MemberDetail({
       {/* Actions footer */}
       <div className="p-3 border-t border-border bg-card/50 flex gap-2">
         <button
-          onClick={() => setEditing(p => !p)}
+          onClick={() => {
+            if (editing) {
+              setForm({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone ?? '', role: user.role });
+            }
+            setEditing(p => !p);
+          }}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted"
         >
           <Edit2 className="w-3.5 h-3.5" /> {editing ? 'Annuler' : 'Modifier'}
@@ -447,7 +451,24 @@ function PermissionsTab() {
     } finally { setSaving(false); }
   }
 
-  function reset() { setMatrix({}); setChanged(false); setSavedOk(false); setLoading(true); getPermissions().then(data => { /* same as init */ setLoading(false); }); }
+  function reset() {
+    setMatrix({});
+    setChanged(false);
+    setSavedOk(false);
+    setLoading(true);
+    getPermissions().then(data => {
+      const perms = data.permissions || {};
+      const roleMap: Record<string, string[]> = {};
+      PERM_ROLES.forEach(r => { roleMap[r.role] = []; });
+      Object.entries(perms).forEach(([action, roles]) => {
+        (roles as string[]).forEach(role => {
+          if (roleMap[role] !== undefined) roleMap[role].push(action);
+        });
+      });
+      setMatrix(roleMap);
+      setLoading(false);
+    }).catch(() => { setLoading(false); });
+  }
 
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" /></div>;
 
@@ -485,8 +506,8 @@ function PermissionsTab() {
           </thead>
           <tbody>
             {PERM_ACTIONS.map((group, gi) => (
-              <>
-                <tr key={`g${gi}`} className="bg-muted/30">
+              <React.Fragment key={`g${gi}`}>
+                <tr className="bg-muted/30">
                   <td colSpan={PERM_ROLES.length + 1} className="px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b border-border/50">
                     {group.group}
                   </td>
@@ -511,7 +532,7 @@ function PermissionsTab() {
                     })}
                   </tr>
                 ))}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>
