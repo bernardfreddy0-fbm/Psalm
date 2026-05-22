@@ -28,51 +28,90 @@ import { toast } from 'sonner';
 // Constantes — source unique de vérité pour tout le module
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Niveau 1 : Direction ──────────────────────────────────────────────────────
+// ── Niveau 2 : Responsables de pôle ──────────────────────────────────────────
+// ── Niveau 3 : Membres opérationnels ─────────────────────────────────────────
+// ── Niveau 1 : Direction ──────────────────────────────────────────────────────
+// ── Niveau 2 : Responsables de pôle ──────────────────────────────────────────
+// ── Niveau 3 : Membres opérationnels ─────────────────────────────────────────
 const ROLES = [
-  'conducteur_louange', 'responsable_technique', 'pasteur', 'choriste',
-  'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique',
-  'bassiste', 'sonorisateur', 'projectionniste', 'videaste', 'dev',
+  // Niveau 1 — Direction
+  'dev', 'pasteur', 'coordinateur',
+  // Niveau 2 — Responsables de pôle
+  'responsable_louange', 'responsable_sonorisation', 'responsable_projection',
+  'responsable_musicien', 'responsable_video', 'responsable_accueil',
+  // Niveau 3 — Membres opérationnels
+  'conducteur_louange', 'choriste',
+  'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste',
+  'sonorisateur', 'projectionniste', 'videaste',
 ];
 
 const ROLE_LABELS: Record<string, string> = {
-  conducteur_louange: 'Cond. Louange', responsable_louange: 'Cond. Louange',
-  responsable_technique: 'Resp. Technique', pasteur: 'Pasteur',
+  // N1
+  dev: 'Dev', pasteur: 'Pasteur', coordinateur: 'Coordinateur',
+  // N2
+  responsable_louange:       'Resp. Louange',
+  responsable_sonorisation:  'Resp. Sono',
+  responsable_projection:    'Resp. Projection',
+  responsable_musicien:      'Resp. Musicien',
+  responsable_video:         'Resp. Vidéo',
+  responsable_accueil:       'Resp. Accueil',
+  // N3
+  conducteur_louange: 'Cond. Louange',
   choriste: 'Choriste', pianiste: 'Pianiste', batteur: 'Batteur',
   guitariste_electrique: 'Guit. Élec', guitariste_acoustique: 'Guit. Acou',
   bassiste: 'Bassiste', sonorisateur: 'Sonorisateur',
-  projectionniste: 'Projectionniste', videaste: 'Vidéaste', dev: 'Dev',
+  projectionniste: 'Projectionniste', videaste: 'Vidéaste',
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  pasteur: 'bg-red-600/10 text-red-600 border-red-600/20',
-  conducteur_louange: 'bg-blue-600/10 text-blue-600 border-blue-600/20',
-  responsable_louange: 'bg-blue-600/10 text-blue-600 border-blue-600/20',
-  responsable_technique: 'bg-cyan-600/10 text-cyan-600 border-cyan-600/20',
-  choriste: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-  pianiste: 'bg-pink-500/10 text-pink-600 border-pink-500/20',
-  batteur: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  guitariste_electrique: 'bg-violet-600/10 text-violet-600 border-violet-600/20',
-  guitariste_acoustique: 'bg-purple-600/10 text-purple-600 border-purple-600/20',
-  bassiste: 'bg-emerald-600/10 text-emerald-600 border-emerald-600/20',
-  sonorisateur: 'bg-teal-600/10 text-teal-600 border-teal-600/20',
-  projectionniste: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
-  videaste: 'bg-sky-600/10 text-sky-600 border-sky-600/20',
-  dev: 'bg-zinc-700/10 text-zinc-500 border-zinc-600/20',
+  // N1
+  dev:          'bg-zinc-700/10 text-zinc-500 border-zinc-600/20',
+  pasteur:      'bg-red-600/10 text-red-600 border-red-600/20',
+  coordinateur: 'bg-sky-600/10 text-sky-600 border-sky-600/20',
+  // N2
+  responsable_louange:       'bg-blue-700/10 text-blue-700 border-blue-700/20',
+  responsable_sonorisation:  'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  responsable_projection:    'bg-teal-600/10 text-teal-600 border-teal-600/20',
+  responsable_musicien:      'bg-emerald-600/10 text-emerald-600 border-emerald-600/20',
+  responsable_video:         'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+  responsable_accueil:       'bg-rose-500/10 text-rose-600 border-rose-500/20',
+  // N3
+  conducteur_louange:   'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  choriste:             'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  pianiste:             'bg-pink-500/10 text-pink-600 border-pink-500/20',
+  batteur:              'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+  guitariste_electrique:'bg-violet-600/10 text-violet-600 border-violet-600/20',
+  guitariste_acoustique:'bg-purple-600/10 text-purple-600 border-purple-600/20',
+  bassiste:             'bg-lime-600/10 text-lime-700 border-lime-600/20',
+  sonorisateur:         'bg-orange-400/10 text-orange-500 border-orange-400/20',
+  projectionniste:      'bg-teal-500/10 text-teal-600 border-teal-500/20',
+  videaste:             'bg-sky-500/10 text-sky-600 border-sky-500/20',
 };
 
 const PERM_ROLES = [
-  { role: 'pasteur',               label: 'Pasteur',          color: 'bg-red-600' },
-  { role: 'responsable_louange',   label: 'Cond. Louange',    color: 'bg-blue-600' },
-  { role: 'choriste',              label: 'Choriste',         color: 'bg-amber-500' },
-  { role: 'bassiste',              label: 'Bassiste',         color: 'bg-emerald-600' },
-  { role: 'batteur',               label: 'Batteur',          color: 'bg-cyan-600' },
-  { role: 'guitariste_electrique', label: 'Guit. Élec',       color: 'bg-violet-600' },
-  { role: 'guitariste_acoustique', label: 'Guit. Acou',       color: 'bg-purple-600' },
-  { role: 'pianiste',              label: 'Pianiste',         color: 'bg-pink-600' },
-  { role: 'sonorisateur',          label: 'Sono',             color: 'bg-orange-500' },
-  { role: 'projectionniste',       label: 'Projection',       color: 'bg-teal-600' },
-  { role: 'videaste',              label: 'Vidéaste',         color: 'bg-indigo-500' },
-  { role: 'dev',                   label: 'Dev',              color: 'bg-zinc-700' },
+  // Niveau 1
+  { role: 'dev',          label: 'Dev',          color: 'bg-zinc-700' },
+  { role: 'pasteur',      label: 'Pasteur',       color: 'bg-red-600' },
+  { role: 'coordinateur', label: 'Coordinateur',  color: 'bg-sky-600' },
+  // Niveau 2
+  { role: 'responsable_louange',      label: 'Resp. Louange',    color: 'bg-blue-700' },
+  { role: 'responsable_sonorisation', label: 'Resp. Sono',       color: 'bg-orange-500' },
+  { role: 'responsable_projection',   label: 'Resp. Projection', color: 'bg-teal-600' },
+  { role: 'responsable_musicien',     label: 'Resp. Musicien',   color: 'bg-emerald-600' },
+  { role: 'responsable_video',        label: 'Resp. Vidéo',      color: 'bg-indigo-500' },
+  { role: 'responsable_accueil',      label: 'Resp. Accueil',    color: 'bg-rose-500' },
+  // Niveau 3
+  { role: 'conducteur_louange',    label: 'Cond. Louange', color: 'bg-blue-500' },
+  { role: 'choriste',              label: 'Choriste',      color: 'bg-amber-500' },
+  { role: 'pianiste',              label: 'Pianiste',      color: 'bg-pink-600' },
+  { role: 'batteur',               label: 'Batteur',       color: 'bg-cyan-600' },
+  { role: 'guitariste_electrique', label: 'Guit. Élec',   color: 'bg-violet-600' },
+  { role: 'guitariste_acoustique', label: 'Guit. Acou',   color: 'bg-purple-600' },
+  { role: 'bassiste',              label: 'Bassiste',      color: 'bg-lime-600' },
+  { role: 'sonorisateur',          label: 'Sono',          color: 'bg-orange-400' },
+  { role: 'projectionniste',       label: 'Projection',    color: 'bg-teal-500' },
+  { role: 'videaste',              label: 'Vidéaste',      color: 'bg-sky-500' },
 ];
 
 const PERM_ACTIONS = [
@@ -116,9 +155,8 @@ type SortDir   = 'asc' | 'desc';
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LEGACY: Record<string, string> = { responsable_louange: 'conducteur_louange' };
-function normalizeRole(r: string) { return LEGACY[r] || r; }
-function toApiRole(r: string) { return r === 'conducteur_louange' ? 'responsable_louange' : r; }
+// Pas d'alias actif — conducteur_louange et responsable_louange sont deux rôles distincts
+function normalizeRole(r: string) { return r.trim(); }
 
 function parseRoles(role: string): string[] {
   if (!role) return [];
@@ -357,7 +395,7 @@ function MemberDetail({
     if (selectedRoles.length === 0) return;
     setSavingRoles(true);
     try {
-      const apiRoles = [...new Set(selectedRoles.map(r => toApiRole(normalizeRole(r))))].join(',');
+      const apiRoles = [...new Set(selectedRoles.map(r => normalizeRole(r)))].join(',');
       await updateMember(user.id, { role: apiRoles });
       toast.success('Rôles mis à jour');
       onUpdated();

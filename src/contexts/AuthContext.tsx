@@ -102,10 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = useCallback((action: string): boolean => {
     if (!user) return false;
-    // dev a toujours accès à tout
-    if (user.role === 'dev' || user.role?.includes('dev')) return true;
+    // Vérification stricte du rôle 'dev' (split pour éviter les faux positifs substring)
+    const userRoles = (user.role ?? '').split(',').map((r: string) => r.trim()).filter(Boolean);
+    if (userRoles.includes('dev')) return true;
+    // Permissions effectives calculées côté serveur (source de vérité principale)
+    if (Array.isArray(user.effective_permissions) && user.effective_permissions.includes(action)) return true;
+    // Fallback : vérification locale via la table permissions chargée en mémoire
     const allowedRoles = permissions[action] || [];
-    return user.role?.split(',').some((r: string) => allowedRoles.includes(r.trim())) ?? false;
+    return userRoles.some(r => allowedRoles.includes(r));
   }, [user, permissions]);
 
   const login = async (email: string, password: string) => {

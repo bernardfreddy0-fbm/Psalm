@@ -187,11 +187,11 @@ export default function DashboardPage() {
 
   const eventBadgeColors: Record<string, string> = {
     culte: 'bg-accent/10 text-accent',
-    jeunesse: 'bg-amber-100 text-amber-700',
-    special: 'bg-purple-100 text-purple-700',
-    conference: 'bg-pink-100 text-pink-700',
-    camp: 'bg-orange-100 text-orange-700',
-    formation: 'bg-teal-100 text-teal-700',
+    jeunesse: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    special: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    conference: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+    camp: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    formation: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
     autre: 'bg-muted text-muted-foreground',
   };
 

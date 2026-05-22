@@ -3,9 +3,8 @@ import { generateSecurePassword } from './security';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const LEGACY_ROLE_ALIASES: Record<string, string> = {
-  responsable_louange: 'conducteur_louange',
-};
+// Pas d'alias actif — conducteur_louange et responsable_louange sont deux rôles distincts
+const LEGACY_ROLE_ALIASES: Record<string, string> = {};
 
 function normalizeRole(role: string): string {
   return LEGACY_ROLE_ALIASES[role] || role;

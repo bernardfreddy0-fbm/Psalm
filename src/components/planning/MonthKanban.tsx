@@ -62,6 +62,11 @@ function getConfirmationStats(s: Sunday): { confirmed: number; total: number } {
   return { confirmed, total };
 }
 
+function getAssigned(edit: EditState, rowKey: string): string[] {
+  if (rowKey === 'dirigeant') return edit.dirigeant_id ? [edit.dirigeant_id] : [];
+  return edit.poles[rowKey] ?? [];
+}
+
 function getCategoryDots(edit: EditState): boolean[] {
   return [
     !!edit.dirigeant_id,
@@ -316,6 +321,150 @@ function MobileBottomSheet({ roleLabel, roleEmoji, dateLabel, available, absent,
 
 // ── Composant principal ───────────────────────────────────────────────────────
 
+// ── ChipsCell (module-level pour éviter le remount à chaque render) ───────────
+
+interface ChipsCellProps {
+  s: Sunday;
+  row: typeof KANBAN_ROWS[number];
+  locked: boolean;
+  edit: EditState | null;
+  absences: AbsenceWithMember[];
+  activePopover: { sundayId: string; role: string } | null;
+  getMemberName: (id: string) => string;
+  removeMember: (sundayId: string, role: string, memberId: string) => void;
+  openPopover: (e: React.MouseEvent<HTMLButtonElement>, sundayId: string, role: string) => void;
+}
+
+function ChipsCell({ s, row, locked, edit, absences, activePopover, getMemberName, removeMember, openPopover }: ChipsCellProps) {
+  if (!edit) return null;
+  const absentIds = getAbsentMemberIds(absences, s.date);
+  const assigned  = getAssigned(edit, row.key);
+  const canAdd    = !locked && (row.key !== 'dirigeant' || assigned.length === 0);
+  const isOpen    = activePopover?.sundayId === s.id && activePopover?.role === row.key;
+  return (
+    <div className="flex flex-wrap gap-1 min-h-[22px]">
+      {assigned.map(id => (
+        <MemberChip
+          key={id}
+          name={getMemberName(id)}
+          absent={absentIds.has(id)}
+          rowKey={row.key}
+          locked={locked}
+          onRemove={() => removeMember(s.id, row.key, id)}
+        />
+      ))}
+      {canAdd && (
+        <button
+          onClick={e => openPopover(e, s.id, row.key)}
+          className={`inline-flex items-center justify-center w-6 h-6 rounded-full transition-all shrink-0 touch-manipulation ${
+            isOpen
+              ? 'bg-primary text-primary-foreground scale-110'
+              : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground active:scale-95'
+          }`}
+        >
+          <Plus size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── SundayHeader (module-level pour éviter le remount à chaque render) ────────
+
+interface SundayHeaderProps {
+  s: Sunday;
+  compact?: boolean;
+  isDirty: boolean;
+  isSaving: boolean;
+  isLocking: boolean;
+  edit: EditState | null;
+  onLock: (s: Sunday) => void;
+  saveSunday: (id: string) => void;
+  onEdit?: (edit: EditState) => void;
+  videos?: YoutubeVideo[];
+  setVideoModal: (v: { videoId: string; title: string } | null) => void;
+}
+
+function SundayHeader({ s, compact = false, isDirty, isSaving, isLocking, edit, onLock, saveSunday, onEdit, videos, setVideoModal }: SundayHeaderProps) {
+  const locked = !!s.is_locked;
+  const past   = isPast(s.date);
+  const dots   = edit ? getCategoryDots(edit) : [false, false, false, false];
+  const { confirmed, total } = getConfirmationStats(s);
+
+  return (
+    <div className={`flex flex-col gap-1 ${past ? 'opacity-70' : ''}`}>
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {locked && <Lock size={9} className="text-amber-500 shrink-0" />}
+          <span className={`font-bold text-foreground ${compact ? 'text-[11px]' : 'text-sm'}`}>
+            {new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+          </span>
+          {!!s.is_jeunesse && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 font-medium leading-none">
+              Jss
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => onLock(s)}
+          disabled={isLocking}
+          className={`p-1 rounded touch-manipulation ${locked ? 'text-amber-500' : 'text-muted-foreground hover:bg-muted'}`}
+        >
+          {isLocking ? <Loader2 size={9} className="animate-spin" /> : locked ? <Lock size={9} /> : <Unlock size={9} />}
+        </button>
+      </div>
+      {!isDirty && <CategoryDots dots={dots} />}
+      {isDirty && (
+        <button
+          onClick={() => saveSunday(s.id)}
+          disabled={isSaving}
+          className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-primary text-primary-foreground disabled:opacity-60 touch-manipulation"
+        >
+          {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Check size={8} />}
+          Sauvegarder
+        </button>
+      )}
+      {!isDirty && total > 0 && (
+        <div className={`flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full w-fit ${
+          confirmed === total ? 'bg-emerald-100 text-emerald-700' : confirmed === 0 ? 'bg-muted text-muted-foreground' : 'bg-amber-100 text-amber-700'
+        }`}>
+          <CheckCircle2 size={8} /> {confirmed}/{total}
+        </div>
+      )}
+      {!isDirty && onEdit && (
+        <button
+          onClick={() => onEdit(edit ?? buildEditState(s))}
+          className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary touch-manipulation"
+        >
+          <Pencil size={8} /> Éditer
+        </button>
+      )}
+      {!isDirty && s.dir_first && (
+        <button
+          onClick={() => shareOnWhatsApp(s)}
+          className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-[#25D366]/10 text-[#25D366] touch-manipulation"
+        >
+          <Share2 size={8} /> WhatsApp
+        </button>
+      )}
+      {(() => {
+        const video = videos?.length ? findVideoForSunday(s.date, videos) : null;
+        if (!video || isDirty) return null;
+        return (
+          <button
+            onClick={() => setVideoModal({ videoId: video.videoId, title: video.title })}
+            className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-red-600/10 text-red-600 dark:text-red-400 touch-manipulation"
+          >
+            <PlaySquare size={8} /> Vidéo
+          </button>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function MonthKanban({
   sundays, members, absences, videos, onLock, lockingId, onRefresh, onEdit,
 }: {
@@ -370,11 +519,6 @@ export function MonthKanban({
   }, [activePopover, isMobile]);
 
   const getEdit = (id: string) => edits[id] ?? null;
-
-  function getAssigned(edit: EditState, rowKey: string): string[] {
-    if (rowKey === 'dirigeant') return edit.dirigeant_id ? [edit.dirigeant_id] : [];
-    return edit.poles[rowKey] ?? [];
-  }
 
   function getPool(roles: string[]): MemberOption[] {
     if (roles.length === 0) return members;
@@ -469,132 +613,11 @@ export function MonthKanban({
   const filteredAvail   = notAssigned.filter(m => !popoverAbsent.has(m.id)).filter(m => !sq || `${m.first_name} ${m.last_name}`.toLowerCase().includes(sq));
   const filteredAbsent  = notAssigned.filter(m => popoverAbsent.has(m.id)).filter(m => !sq || `${m.first_name} ${m.last_name}`.toLowerCase().includes(sq));
 
-  // ── Cellule chips (desktop + mobile) ───────────────────────────────────────
-
-  function ChipsCell({ s, row, locked }: { s: Sunday; row: typeof KANBAN_ROWS[number]; locked: boolean }) {
-    const edit = getEdit(s.id);
-    if (!edit) return null;
-    const absentIds = getAbsentMemberIds(absences, s.date);
-    const assigned  = getAssigned(edit, row.key);
-    const canAdd    = !locked && (row.key !== 'dirigeant' || assigned.length === 0);
-    const isOpen    = activePopover?.sundayId === s.id && activePopover?.role === row.key;
-    return (
-      <div className="flex flex-wrap gap-1 min-h-[22px]">
-        {assigned.map(id => (
-          <MemberChip
-            key={id}
-            name={getMemberName(id)}
-            absent={absentIds.has(id)}
-            rowKey={row.key}
-            locked={locked}
-            onRemove={() => removeMember(s.id, row.key, id)}
-          />
-        ))}
-        {canAdd && (
-          <button
-            onClick={e => openPopover(e, s.id, row.key)}
-            className={`inline-flex items-center justify-center w-6 h-6 rounded-full transition-all shrink-0 touch-manipulation ${
-              isOpen
-                ? 'bg-primary text-primary-foreground scale-110'
-                : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground active:scale-95'
-            }`}
-          >
-            <Plus size={12} />
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  // ── En-tête de colonne ──────────────────────────────────────────────────────
-
-  function SundayHeader({ s, compact = false }: { s: Sunday; compact?: boolean }) {
-    const locked = !!s.is_locked;
-    const past   = isPast(s.date);
-    const isDirty   = dirty.has(s.id);
-    const isSaving  = saving.has(s.id);
-    const isLocking = lockingId === s.id;
-    const edit      = getEdit(s.id);
-    const dots      = edit ? getCategoryDots(edit) : [false, false, false, false];
-    const { confirmed, total } = getConfirmationStats(s);
-
-    return (
-      <div className={`flex flex-col gap-1 ${past ? 'opacity-70' : ''}`}>
-        <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {locked && <Lock size={9} className="text-amber-500 shrink-0" />}
-            <span className={`font-bold text-foreground ${compact ? 'text-[11px]' : 'text-sm'}`}>
-              {new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-            </span>
-            {!!s.is_jeunesse && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 font-medium leading-none">
-                Jss
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => onLock(s)}
-            disabled={isLocking}
-            className={`p-1 rounded touch-manipulation ${locked ? 'text-amber-500' : 'text-muted-foreground hover:bg-muted'}`}
-          >
-            {isLocking ? <Loader2 size={9} className="animate-spin" /> : locked ? <Lock size={9} /> : <Unlock size={9} />}
-          </button>
-        </div>
-        {!isDirty && <CategoryDots dots={dots} />}
-        {isDirty && (
-          <button
-            onClick={() => saveSunday(s.id)}
-            disabled={isSaving}
-            className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-primary text-primary-foreground disabled:opacity-60 touch-manipulation"
-          >
-            {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Check size={8} />}
-            Sauvegarder
-          </button>
-        )}
-        {!isDirty && total > 0 && (
-          <div className={`flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full w-fit ${
-            confirmed === total ? 'bg-emerald-100 text-emerald-700' : confirmed === 0 ? 'bg-muted text-muted-foreground' : 'bg-amber-100 text-amber-700'
-          }`}>
-            <CheckCircle2 size={8} /> {confirmed}/{total}
-          </div>
-        )}
-        {!isDirty && onEdit && (
-          <button
-            onClick={() => onEdit(edit ?? buildEditState(s))}
-            className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary touch-manipulation"
-          >
-            <Pencil size={8} /> Éditer
-          </button>
-        )}
-        {!isDirty && s.dir_first && (
-          <button
-            onClick={() => shareOnWhatsApp(s)}
-            className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-[#25D366]/10 text-[#25D366] touch-manipulation"
-          >
-            <Share2 size={8} /> WhatsApp
-          </button>
-        )}
-        {(() => {
-          const video = videos?.length ? findVideoForSunday(s.date, videos) : null;
-          if (!video || isDirty) return null;
-          return (
-            <button
-              onClick={() => setVideoModal({ videoId: video.videoId, title: video.title })}
-              className="flex items-center justify-center gap-1 w-full px-1 py-0.5 text-[10px] font-semibold rounded bg-red-600/10 text-red-600 dark:text-red-400 touch-manipulation"
-            >
-              <PlaySquare size={8} /> Vidéo
-            </button>
-          );
-        })()}
-      </div>
-    );
-  }
-
   // ════════════════════════════════════════════════════════════════════════════
   // DESKTOP TABLE (md+)
   // ════════════════════════════════════════════════════════════════════════════
 
-  const DesktopTable = () => (
+  const desktopTable = () => (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="overflow-x-auto scrollbar-none">
         <table className="border-collapse text-xs" style={{ minWidth: `${160 + sundays.length * 200}px` }}>
@@ -605,7 +628,18 @@ export function MonthKanban({
               </th>
               {sundays.map(s => (
                 <th key={s.id} className={`min-w-[200px] px-2 py-2 text-left border-r border-border last:border-r-0 align-top font-normal ${isPast(s.date) ? 'opacity-70' : ''} ${s.is_locked ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''}`}>
-                  <SundayHeader s={s} compact />
+                  <SundayHeader
+                    s={s} compact
+                    isDirty={dirty.has(s.id)}
+                    isSaving={saving.has(s.id)}
+                    isLocking={lockingId === s.id}
+                    edit={getEdit(s.id)}
+                    onLock={onLock}
+                    saveSunday={saveSunday}
+                    onEdit={onEdit}
+                    videos={videos}
+                    setVideoModal={setVideoModal}
+                  />
                 </th>
               ))}
             </tr>
@@ -625,7 +659,14 @@ export function MonthKanban({
                     </td>
                     {sundays.map(s => (
                       <td key={s.id} className={`border-r border-border last:border-r-0 px-2 py-2 align-top ${s.is_locked ? 'bg-amber-50/20 dark:bg-amber-950/5' : 'hover:bg-muted/5'}`}>
-                        <ChipsCell s={s} row={row} locked={!!s.is_locked} />
+                        <ChipsCell
+                          s={s} row={row} locked={!!s.is_locked}
+                          edit={getEdit(s.id)} absences={absences}
+                          activePopover={activePopover}
+                          getMemberName={getMemberName}
+                          removeMember={removeMember}
+                          openPopover={openPopover}
+                        />
                       </td>
                     ))}
                   </tr>
@@ -642,7 +683,7 @@ export function MonthKanban({
   // MOBILE CARDS (< md)
   // ════════════════════════════════════════════════════════════════════════════
 
-  const MobileCards = () => (
+  const mobileCards = () => (
     <div className="flex flex-col gap-4">
       {sundays.map(s => {
         const locked  = !!s.is_locked;
@@ -727,7 +768,14 @@ export function MonthKanban({
                         {row.emoji} {row.label}
                       </span>
                       <div className="flex-1">
-                        <ChipsCell s={s} row={row} locked={locked} />
+                        <ChipsCell
+                          s={s} row={row} locked={locked}
+                          edit={getEdit(s.id)} absences={absences}
+                          activePopover={activePopover}
+                          getMemberName={getMemberName}
+                          removeMember={removeMember}
+                          openPopover={openPopover}
+                        />
                       </div>
                     </div>
                   ))}
@@ -761,8 +809,8 @@ export function MonthKanban({
 
   return (
     <>
-      <div className="hidden md:block"><DesktopTable /></div>
-      <div className="md:hidden"><MobileCards /></div>
+      <div className="hidden md:block">{desktopTable()}</div>
+      <div className="md:hidden">{mobileCards()}</div>
 
       {/* ── DESKTOP : Popover flottant ── */}
       {activePopover && !isMobile && popoverPos && (
