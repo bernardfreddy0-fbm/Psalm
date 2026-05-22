@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   getAllAccounts, updateMember, createMember,
   resetMemberPassword, getPermissions, savePermissions,
-  getMemberPermissions, setMemberPermissions,
+  getMemberPermissions, setMemberPermissions, setMemberProtected,
   type MemberPermissions,
 } from '@/lib/api';
 import { generateSecurePassword } from '@/lib/security';
 import {
-  Search, Shield, Key, Plus, Copy, Eye, EyeOff,
+  Search, Shield, ShieldCheck, ShieldOff, Key, Plus, Copy, Eye, EyeOff,
   UserCog, Phone, Mail, Calendar,
   RefreshCw, Edit2, Lock, Unlock, Check, X, Save,
   RotateCcw, ChevronRight, Info,
@@ -100,6 +101,7 @@ const allActions = PERM_ACTIONS.flatMap(g => g.actions);
 type Account = {
   id: string; first_name: string; last_name: string; email: string;
   phone?: string; role: string; is_active?: string | number | boolean;
+  is_protected?: boolean;
   instrument?: string; created_at?: string; updated_at?: string;
 };
 
@@ -194,11 +196,13 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 function MemberDetail({
   user,
   matrix,
+  currentUserRole,
   onClose,
   onUpdated,
 }: {
   user: Account;
   matrix: Record<string, string[]>;
+  currentUserRole: string;
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -248,6 +252,20 @@ function MemberDetail({
   }
 
   const userRoles = parseRoles(user.role);
+  const isDev = currentUserRole.split(',').map(r => r.trim()).includes('dev');
+  const [togglingProtection, setTogglingProtection] = useState(false);
+
+  async function toggleProtection() {
+    const newState = !user.is_protected;
+    setTogglingProtection(true);
+    try {
+      await setMemberProtected(user.id, newState);
+      toast.success(newState ? '🔒 Compte protégé' : '🔓 Protection retirée');
+      onUpdated();
+    } catch (err: any) {
+      toast.error('Erreur', { description: err.message });
+    } finally { setTogglingProtection(false); }
+  }
 
   function toggleRole(r: string) {
     setSelectedRoles(prev =>
@@ -308,7 +326,14 @@ function MemberDetail({
         <div className="flex items-center gap-3">
           <Avatar user={user} size="lg" />
           <div>
-            <p className="font-semibold text-sm">{user.first_name} {user.last_name}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-sm">{user.first_name} {user.last_name}</p>
+              {user.is_protected && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                  <ShieldCheck className="w-2.5 h-2.5" /> Protégé
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1 mt-0.5">
               {userRoles.map(r => <RoleBadge key={r} role={r} />)}
             </div>
@@ -504,30 +529,52 @@ function MemberDetail({
       </div>
 
       {/* Actions footer */}
-      <div className="p-3 border-t border-border bg-card/50 flex gap-2">
-        <button
-          onClick={() => {
-            if (editing) {
-              setForm({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone ?? '', role: user.role });
-              setSelectedRoles(parseRoles(user.role));
+      <div className="p-3 border-t border-border bg-card/50 space-y-2">
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              if (editing) {
+                setForm({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone ?? '', role: user.role });
+                setSelectedRoles(parseRoles(user.role));
+              }
+              setEditing(p => !p);
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> {editing ? 'Annuler' : 'Modifier'}
+          </button>
+          <button
+            onClick={toggleActive}
+            disabled={user.is_protected}
+            title={user.is_protected ? 'Compte protégé — retirer la protection d\'abord' : undefined}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+              active
+                ? 'border-orange-300 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30'
+                : 'border-green-300 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30'
+            }`}
+          >
+            {active ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            {active ? 'Désactiver' : 'Activer'}
+          </button>
+        </div>
+
+        {/* Bouton protection — visible uniquement pour le rôle dev */}
+        {isDev && (
+          <button
+            onClick={toggleProtection}
+            disabled={togglingProtection}
+            className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
+              user.is_protected
+                ? 'border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20'
+                : 'border-slate-300 text-slate-500 hover:bg-muted'
+            }`}
+          >
+            {user.is_protected
+              ? <><ShieldOff className="w-3.5 h-3.5" /> Retirer la protection</>
+              : <><ShieldCheck className="w-3.5 h-3.5" /> Accorder la protection</>
             }
-            setEditing(p => !p);
-          }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted"
-        >
-          <Edit2 className="w-3.5 h-3.5" /> {editing ? 'Annuler' : 'Modifier'}
-        </button>
-        <button
-          onClick={toggleActive}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium ${
-            active
-              ? 'border-orange-300 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30'
-              : 'border-green-300 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30'
-          }`}
-        >
-          {active ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-          {active ? 'Désactiver' : 'Activer'}
-        </button>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -677,6 +724,7 @@ function PermissionsTab() {
 
 export default function AccesPage() {
   const qc = useQueryClient();
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState<Tab>('membres');
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
@@ -826,9 +874,14 @@ export default function AccesPage() {
                   >
                     <Avatar user={u} size="sm" />
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${!active ? 'line-through text-muted-foreground' : ''}`}>
-                        {u.first_name} {u.last_name}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-sm font-medium truncate ${!active ? 'line-through text-muted-foreground' : ''}`}>
+                          {u.first_name} {u.last_name}
+                        </p>
+                        {u.is_protected && (
+                          <ShieldCheck className="w-3 h-3 text-amber-500 shrink-0" title="Compte protégé" />
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-0.5 mt-0.5">
                         {roles.slice(0, 2).map(r => <RoleBadge key={r} role={r} />)}
                       </div>
@@ -847,6 +900,7 @@ export default function AccesPage() {
               <MemberDetail
                 user={selectedUser}
                 matrix={matrix}
+                currentUserRole={currentUser?.role ?? ''}
                 onClose={() => setSelectedId(null)}
                 onUpdated={() => qc.invalidateQueries({ queryKey: ['all-accounts'] })}
               />

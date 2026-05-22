@@ -256,6 +256,19 @@ export async function savePermissions(matrix: Record<string, string[]>) {
   return { success: true };
 }
 
+// ── Protection de compte (réservé au rôle dev) ────────────────────────────────
+
+/**
+ * Accorde ou retire la protection d'un compte.
+ * Seul l'utilisateur ayant le rôle 'dev' peut appeler cet endpoint.
+ */
+export const setMemberProtected = async (memberId: string, protect: boolean): Promise<void> => {
+  await apiFetch(`/members/${memberId}/protected`, {
+    method: 'PUT',
+    json: { protected: protect },
+  });
+};
+
 // ── Permissions par membre (style Active Directory) ───────────────────────────
 
 export interface MemberPermissions {
