@@ -2,15 +2,15 @@
 
 ## Projet
 Interface d'administration de la plateforme de gestion de l'église AEF (cultes, membres, chants, planning).
-- **Frontend** : https://admin-psalm.a-e-f.fr/admin
+- **Frontend** : https://admin-psalm.a-e-f.fr (racine — basename `/`)
 - **API principale** : https://api-psalm.a-e-f.fr (Hono + Node.js — **pas PHP**)
-- Deploy : `cd /Users/fbm/Desktop/Psalm && npm run build && bash deploy-admin.sh`
+- Deploy : `git push fork main` → Coolify rebuild automatique (Dockerfile + Nginx sur VPS OVH)
 
 ## Stack technique
 - React 18 + TypeScript + Vite
 - Tailwind CSS + shadcn/ui (Radix UI)
 - React Query v5 (`@tanstack/react-query`) pour tous les appels API
-- React Router v6 avec `basename="/admin"`
+- React Router v6 avec `basename="/"`
 - Zod + React Hook Form pour la validation
 - Vitest pour les tests unitaires
 - Playwright pour les tests e2e
@@ -53,14 +53,11 @@ src/
 
 ## Déploiement
 ```bash
-cd /Users/fbm/Desktop/Psalm
-npm run build && bash deploy-admin.sh
+git push fork main   # Coolify rebuild automatique sur le VPS OVH
 ```
-- Hébergement : o2switch, user `bqzk4896`, host `yellow.o2switch.net`
-- SSH key : `~/.ssh/id_ed25519`
-- Remote dir : `~/admin-psalm.a-e-f.fr/admin/`
-- ⚠️ Toujours déployer via SSH (SCP), jamais FTP (cache PowerBoost o2switch non purgeable)
+- Hébergement : VPS OVH 141.94.95.7, via Coolify (Dockerfile + Nginx + Traefik HTTPS auto)
 - Remote git : `fork` (pas `origin`) → `git push fork main`
+- ⚠️ Ne plus utiliser `bash deploy-admin.sh` (SCP o2switch obsolète)
 
 ## Commandes dev
 ```bash
