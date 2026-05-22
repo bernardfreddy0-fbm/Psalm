@@ -371,7 +371,7 @@ function EditModal({ user, onClose, onUpdated }: { user: Account; onClose: () =>
                   <input type="email" value={form.email} disabled
                     className={`${inputCls} pl-8 opacity-50 cursor-not-allowed`} />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">L'email ne peut pas être modifié — il sert d'identifiant Supabase.</p>
+                <p className="text-[10px] text-muted-foreground mt-1">L'email ne peut pas être modifié ici — utilisez le module Accès &amp; Identités.</p>
               </Field>
               <Field label="Téléphone">
                 <div className="relative">

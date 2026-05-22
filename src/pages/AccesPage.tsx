@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getAllAccounts, updateMember, updateMemberEmail, createMember,
+  getAllAccounts, updateMember, createMember,
   resetMemberPassword, getPermissions, savePermissions,
 } from '@/lib/api';
 import { generateSecurePassword } from '@/lib/security';
@@ -203,12 +203,19 @@ function MemberDetail({
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone ?? '', role: user.role });
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(() => parseRoles(user.role));
   const [saving, setSaving] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [newPwd, setNewPwd] = useState('');
   const [resetting, setResetting] = useState(false);
 
   const userRoles = parseRoles(user.role);
+
+  function toggleRole(r: string) {
+    setSelectedRoles(prev =>
+      prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
+    );
+  }
 
   // Permissions accordées via les rôles du membre
   const granted = useMemo(() => {
@@ -223,18 +230,14 @@ function MemberDetail({
     e.preventDefault();
     setSaving(true);
     try {
-      await updateMember(user.id, { first_name: form.first_name, last_name: form.last_name, email: form.email, phone: form.phone, role: form.role });
-
-      // Synchroniser l'email Auth Supabase seulement si l'email a réellement changé
-      if (form.email !== user.email) {
-        try {
-          await updateMemberEmail(user.id, form.email);
-          toast.info("Email mis à jour — un email de confirmation a été envoyé à l'utilisateur");
-        } catch (authErr: any) {
-          toast.error('Erreur mise à jour email Auth', { description: authErr.message });
-        }
-      }
-
+      // PUT /members/:id gère tous les champs y compris email — un seul appel suffit
+      await updateMember(user.id, {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        phone: form.phone,
+        role: selectedRoles.join(',') || form.role,
+      });
       toast.success('Membre mis à jour');
       onUpdated();
       setEditing(false);
@@ -302,14 +305,34 @@ function MemberDetail({
               </div>
               <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="Email" className="px-2 py-1.5 rounded border border-input bg-background text-sm w-full" />
               <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="Téléphone" className="px-2 py-1.5 rounded border border-input bg-background text-sm w-full" />
-              <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className="px-2 py-1.5 rounded border border-input bg-background text-sm w-full">
-                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
-              </select>
+              {/* Rôles multiples — checkboxes */}
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1 font-medium">Rôles</p>
+                <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
+                  {ROLES.map(r => {
+                    const selected = selectedRoles.includes(r);
+                    return (
+                      <button key={r} type="button" onClick={() => toggleRole(r)}
+                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[11px] border transition-colors text-left ${
+                          selected ? 'bg-primary/10 border-primary/40 text-primary font-semibold' : 'border-border text-muted-foreground hover:bg-muted'
+                        }`}>
+                        <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                          {selected && <Check className="w-2 h-2 text-primary-foreground" />}
+                        </div>
+                        {ROLE_LABELS[r] ?? r}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedRoles.length === 0 && (
+                  <p className="text-[10px] text-destructive mt-1">Au moins un rôle requis</p>
+                )}
+              </div>
               <div className="flex gap-2">
-                <button type="submit" disabled={saving} className="flex-1 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
+                <button type="submit" disabled={saving || selectedRoles.length === 0} className="flex-1 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
                   {saving ? 'Enregistrement…' : '✓ Enregistrer'}
                 </button>
-                <button type="button" onClick={() => setEditing(false)} className="px-3 py-1.5 rounded border border-border text-xs">Annuler</button>
+                <button type="button" onClick={() => { setEditing(false); setSelectedRoles(parseRoles(user.role)); }} className="px-3 py-1.5 rounded border border-border text-xs">Annuler</button>
               </div>
             </form>
           ) : (
@@ -389,6 +412,7 @@ function MemberDetail({
           onClick={() => {
             if (editing) {
               setForm({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone ?? '', role: user.role });
+              setSelectedRoles(parseRoles(user.role));
             }
             setEditing(p => !p);
           }}

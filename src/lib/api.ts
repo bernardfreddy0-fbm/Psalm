@@ -128,7 +128,7 @@ export const deleteMember = async (id: string) => {
 };
 
 export const resetMemberPassword = async (userId: string, newPassword: string) => {
-  await apiFetch(`/members/${userId}`, { method: 'PUT', json: { password: newPassword } });
+  await apiFetch(`/members/${userId}/reset-password`, { method: 'POST', json: { password: newPassword } });
   await logSecurityEvent('password_reset', { target_id: userId }).catch(() => {});
   return { success: true };
 };
