@@ -1,0 +1,132 @@
+<h2>Migration complète → OVH VPS : impact sur l'écosystème</h2>
+<p class="subtitle">Les deux apps utilisent Supabase directement. Voici ce que ça change.</p>
+
+<div class="section">
+  <h3>État réel des deux apps aujourd'hui</h3>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+
+    <div style="flex:1;min-width:200px;background:#2a1a0f;border:1px solid #f59e0b;border-radius:8px;padding:14px">
+      <div style="color:#f59e0b;font-size:11px;font-weight:700;margin-bottom:8px">PsalmAdmin</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        🔴 <code>supabaseAdmin</code> — service key exposée dans bundle<br>
+        🟡 <code>supabase</code> — anon key + Auth<br>
+        🟡 Supabase Storage (partitions)
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:200px;background:#0f2a1a;border:1px solid #4ade80;border-radius:8px;padding:14px">
+      <div style="color:#4ade80;font-size:11px;font-weight:700;margin-bottom:8px">PsalmMembre</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        ✅ <code>supabase</code> — anon key seulement (sécurisé)<br>
+        ✅ RLS Supabase protège les données<br>
+        ✅ Supabase Auth (même projet)<br>
+        ✅ Storage (lecture partitions)
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:160px;background:#1a1a2e;border:1px solid #38bdf8;border-radius:8px;padding:14px">
+      <div style="color:#38bdf8;font-size:11px;font-weight:700;margin-bottom:8px">Base commune</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        Tables : profiles, sundays,<br>songs, events, permissions<br>
+        Auth : Supabase Auth commun<br>
+        Storage : bucket songs
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Après migration — architecture cible</h3>
+  <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
+
+    <div style="flex:1;min-width:130px;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;padding:12px;text-align:center">
+      <div style="color:#6366f1;font-size:11px;font-weight:700;margin-bottom:6px">PsalmAdmin</div>
+      <div style="font-size:10px;color:#94a3b8">fetch() uniquement<br>Zéro Supabase SDK</div>
+    </div>
+
+    <div style="display:flex;align-items:center;color:#6366f1;font-size:18px">⇄</div>
+
+    <div style="flex:2;min-width:200px;background:#0f2a1a;border:2px solid #4ade80;border-radius:8px;padding:12px;text-align:center">
+      <div style="color:#4ade80;font-size:11px;font-weight:700;margin-bottom:6px">Node.js / Hono API — OVH VPS</div>
+      <div style="font-size:10px;color:#94a3b8;line-height:1.7">
+        Auth (JWT + email via Resend)<br>
+        Tous les endpoints data<br>
+        Endpoints IA (Claude)<br>
+        Service key Supabase ou PostgreSQL ici
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;color:#4ade80;font-size:18px">⇄</div>
+
+    <div style="flex:1;min-width:130px;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;padding:12px;text-align:center">
+      <div style="color:#6366f1;font-size:11px;font-weight:700;margin-bottom:6px">PsalmMembre</div>
+      <div style="font-size:10px;color:#94a3b8">fetch() uniquement<br>Zéro Supabase SDK</div>
+    </div>
+
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;font-size:10px;color:#94a3b8">🗄 PostgreSQL<br><span style="color:#4ade80">OVH VPS</span></div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;font-size:10px;color:#94a3b8">🔒 Secrets<br><span style="color:#4ade80">Hono seulement</span></div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;font-size:10px;color:#94a3b8">🪣 Fichiers Minio<br><span style="color:#4ade80">OVH VPS</span></div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;font-size:10px;color:#94a3b8">🤖 Claude API<br><span style="color:#4ade80">Hono seulement</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Impact par composant</h3>
+  <table style="width:100%;font-size:11px;border-collapse:collapse">
+    <thead>
+      <tr style="color:#64748b;text-align:left">
+        <th style="padding:6px 8px;border-bottom:1px solid #1e2a3a">Composant</th>
+        <th style="padding:6px 8px;border-bottom:1px solid #1e2a3a">Effort</th>
+        <th style="padding:6px 8px;border-bottom:1px solid #1e2a3a">Ce qui change</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">PostgreSQL sur VPS</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#4ade80">✅ Facile</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Template Coolify, pg_dump depuis Supabase, restore</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Hono API (endpoints data)</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#f59e0b">🟡 Moyen</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">~20 endpoints (membres, planning, chants, events…)</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Auth (JWT + emails)</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#f59e0b">🟡 Moyen</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">better-auth ou Lucia, login/reset via Resend</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">PsalmAdmin frontend</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#ef4444">🔴 Lourd</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Remplacer supabase/supabaseAdmin → fetch() dans api.ts (1 fichier principal)</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">PsalmMembre frontend</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#f59e0b">🟡 Moyen</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Même refactor api.ts, mais RLS remplacé par middleware Hono</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Storage (partitions)</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a"><span style="color:#4ade80">✅ Facile</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #0f172a">Minio sur VPS ou Cloudflare R2 (gratuit 10GB)</td>
+      </tr>
+      <tr style="color:#94a3b8">
+        <td style="padding:6px 8px">Module IA</td>
+        <td style="padding:6px 8px"><span style="color:#4ade80">✅ Propre</span></td>
+        <td style="padding:6px 8px">S'intègre naturellement dans Hono — 0 Supabase</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div style="background:#0f2a1a;border:1px solid #4ade80;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.8">
+    <strong style="color:#4ade80">Estimation totale : 3–4 semaines</strong> en travaillant par phases.<br>
+    La bonne nouvelle : tout est déjà sur OVH VPS. Pas de changement d'infrastructure, juste de stack applicative.<br>
+    <strong style="color:#fff">Résultat : zéro dépendance externe payante, zéro secret dans le frontend, un seul backend TypeScript pour tout.</strong>
+  </div>
+</div>

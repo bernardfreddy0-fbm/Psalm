@@ -1,0 +1,86 @@
+<h2>Design — Migration Backend AEF (Spec 1)</h2>
+<p class="subtitle">5 phases progressives · Supabase reste actif jusqu'à validation complète</p>
+
+<div class="section">
+  <h3>Phase 1 — Infrastructure (≈ 2 jours)</h3>
+  <div style="background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.9">
+    <span style="color:#4ade80;font-weight:700">Objectif :</span> Avoir le squelette Hono + PostgreSQL tournant sur Coolify, accessible en HTTPS.<br>
+    • Créer service Coolify <strong style="color:#e2e8f0">PostgreSQL 16</strong> sur OVH VPS<br>
+    • Importer le schéma Supabase via <code>pg_dump --schema-only</code><br>
+    • Créer service Coolify <strong style="color:#e2e8f0">Node.js 22 (Docker)</strong> — projet Hono vide<br>
+    • Configurer domaine <code>api.a-e-f.fr</code> avec SSL Let's Encrypt via Coolify<br>
+    • Créer service Coolify <strong style="color:#e2e8f0">Minio</strong> pour le stockage fichiers<br>
+    • Variables d'environnement : <code>DATABASE_URL</code>, <code>JWT_SECRET</code>, <code>RESEND_API_KEY</code>, <code>MINIO_*</code>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Phase 2 — Auth (≈ 3 jours)</h3>
+  <div style="background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.9">
+    <span style="color:#4ade80;font-weight:700">Objectif :</span> Remplacer Supabase Auth par JWT Hono. C'est le bloc le plus critique — les deux apps en dépendent.<br>
+    • <strong style="color:#e2e8f0">Library : better-auth</strong> (TypeScript-first, supporte email/password + reset, bien maintenu)<br>
+    • Endpoints : <code>POST /auth/login</code> · <code>POST /auth/logout</code> · <code>POST /auth/refresh</code> · <code>POST /auth/reset-password</code> · <code>POST /auth/set-password</code><br>
+    • JWT signé HMAC-SHA256, expiration 7j + refresh token 30j stocké en base<br>
+    • Reset password via Resend (email avec lien tokenisé, valable 1h)<br>
+    • Migrer les hash de mots de passe depuis Supabase (format bcrypt compatible)<br>
+    • <strong style="color:#e2e8f0">Tester en parallèle</strong> avant de couper Supabase Auth
+  </div>
+</div>
+
+<div class="section">
+  <h3>Phase 3 — Endpoints data Hono (≈ 5 jours)</h3>
+  <div style="background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.9">
+    <span style="color:#4ade80;font-weight:700">Objectif :</span> Recréer tous les appels Supabase actuels en endpoints Hono typés.<br>
+    • <strong style="color:#e2e8f0">ORM : Drizzle</strong> (TypeScript-first, léger, SQL explicite, parfait avec PostgreSQL)<br>
+    • Groupes d'endpoints : membres · planning · chants · événements · permissions · config · absences · disponibilités<br>
+    • Middleware d'auth sur toutes les routes protégées (vérifie JWT Hono)<br>
+    • Middleware de rôle pour les routes admin-only (remplace RLS Supabase)<br>
+    • Upload partitions : Hono reçoit le fichier → stocke dans Minio → retourne URL publique<br>
+    • Migration données : <code>pg_dump --data-only</code> depuis Supabase → restore PostgreSQL VPS
+  </div>
+</div>
+
+<div class="section">
+  <h3>Phase 4 — Migration frontends (≈ 4 jours)</h3>
+  <div style="background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.9">
+    <span style="color:#4ade80;font-weight:700">Objectif :</span> Supprimer le SDK Supabase des deux apps, connecter sur Hono.<br>
+    • <strong style="color:#e2e8f0">PsalmAdmin</strong> : remplacer <code>supabase.ts</code> + <code>supabaseAdmin</code> → classe <code>ApiClient</code> avec JWT Bearer<br>
+    • <strong style="color:#e2e8f0">PsalmMembre</strong> : même refactor, la logique RLS migre vers les middlewares Hono<br>
+    • Supprimer les dépendances <code>@supabase/supabase-js</code> des deux <code>package.json</code><br>
+    • Supprimer variables <code>VITE_SUPABASE_*</code> des configs Coolify<br>
+    • Tests de non-régression sur toutes les pages des deux apps
+  </div>
+</div>
+
+<div class="section">
+  <h3>Phase 5 — Extinction Supabase (≈ 1 jour)</h3>
+  <div style="background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:14px;font-size:11px;color:#94a3b8;line-height:1.9">
+    <span style="color:#4ade80;font-weight:700">Objectif :</span> Couper Supabase proprement après validation complète en production.<br>
+    • Vérifier en prod que les deux apps fonctionnent 100% sur Hono pendant 48h<br>
+    • Exporter une dernière sauvegarde complète Supabase<br>
+    • Désactiver le projet Supabase (plan Free supprimé automatiquement après inactivité)<br>
+    • Archiver les variables d'environnement Supabase dans un coffre-fort sécurisé
+  </div>
+</div>
+
+<div class="section">
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:160px;background:#1e1e3a;border-radius:8px;padding:12px;font-size:11px">
+      <div style="color:#818cf8;font-weight:700;margin-bottom:6px">⏱ Durée totale estimée</div>
+      <div style="color:#e2e8f0;font-size:20px;font-weight:700">~15 jours</div>
+      <div style="color:#64748b">ouvrables · en travaillant par phases</div>
+    </div>
+    <div style="flex:1;min-width:160px;background:#1e1e3a;border-radius:8px;padding:12px;font-size:11px">
+      <div style="color:#818cf8;font-weight:700;margin-bottom:6px">🔧 Stack technique</div>
+      <div style="color:#94a3b8;line-height:1.7">Hono · Drizzle · better-auth<br>PostgreSQL 16 · Minio<br>Resend · Coolify</div>
+    </div>
+    <div style="flex:2;min-width:200px;background:#0a1f12;border:1px solid #166534;border-radius:8px;padding:12px;font-size:11px">
+      <div style="color:#4ade80;font-weight:700;margin-bottom:6px">✅ Résultat à l'issue de Phase 5</div>
+      <div style="color:#94a3b8;line-height:1.7">
+        Zéro secret dans le frontend · Un seul backend TypeScript<br>
+        Données sur OVH VPS EU · Auth maîtrisée<br>
+        Prêt pour le module IA (Spec 2)
+      </div>
+    </div>
+  </div>
+</div>

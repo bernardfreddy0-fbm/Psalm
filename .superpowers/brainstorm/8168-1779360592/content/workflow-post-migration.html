@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow post-migration AEF</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a1a; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 32px 24px; min-height: 100vh; }
+  h1 { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #64748b; margin-bottom: 32px; }
+
+  /* ── Layers ── */
+  .layer { margin-bottom: 20px; }
+  .layer-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #475569; margin-bottom: 10px; padding-left: 4px; }
+
+  /* ── Boxes ── */
+  .row { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+  .box {
+    border-radius: 10px; padding: 14px 16px; flex: 1; min-width: 140px;
+    border: 1px solid transparent;
+  }
+  .box-title { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .box-body { font-size: 11px; color: #94a3b8; line-height: 1.8; }
+  .box-body code { background: #1e2a3a; padding: 1px 5px; border-radius: 3px; font-size: 10px; color: #7dd3fc; }
+  .tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px; }
+
+  /* Colors */
+  .blue  { background: #0f1829; border-color: #6366f1; }
+  .blue .box-title  { color: #818cf8; }
+  .green { background: #0a1f12; border-color: #4ade80; }
+  .green .box-title { color: #4ade80; }
+  .amber { background: #1c1205; border-color: #f59e0b; }
+  .amber .box-title { color: #f59e0b; }
+  .sky   { background: #051824; border-color: #38bdf8; }
+  .sky .box-title   { color: #38bdf8; }
+  .purple{ background: #140f2a; border-color: #a78bfa; }
+  .purple .box-title{ color: #c4b5fd; }
+  .pink  { background: #1a0a18; border-color: #f472b6; }
+  .pink .box-title  { color: #f9a8d4; }
+  .slate { background: #0f1219; border-color: #334155; }
+  .slate .box-title { color: #94a3b8; }
+
+  /* ── Arrows ── */
+  .arrow-row { display: flex; justify-content: center; gap: 24px; margin: 8px 0; flex-wrap: wrap; }
+  .arrow { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .arrow-line { width: 2px; height: 24px; background: #1e2a3a; }
+  .arrow-head { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid #334155; }
+  .arrow-label { font-size: 9px; color: #475569; white-space: nowrap; }
+
+  /* ── Connector ── */
+  .connector {
+    border: 1px dashed #1e2a3a; border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 8px 0;
+  }
+  .connector-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Security badge ── */
+  .sec-badge { display: inline-flex; align-items: center; gap: 4px; background: #0a1f12; border: 1px solid #4ade80; border-radius: 20px; padding: 3px 10px; font-size: 10px; color: #4ade80; font-weight: 600; }
+  .sec-badge-red { background: #1f0a0a; border-color: #ef4444; color: #fca5a5; }
+
+  /* ── Flow legend ── */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 24px; padding-top: 20px; border-top: 1px solid #1e2a3a; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #64748b; }
+  .legend-line { width: 24px; height: 2px; }
+
+  /* ── Secrets box ── */
+  .secrets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .secret-pill { background: #0f1829; border: 1px solid #6366f1; border-radius: 20px; padding: 2px 10px; font-size: 10px; color: #818cf8; }
+</style>
+</head>
+<body>
+
+<h1>Écosystème AEF — Architecture post-migration</h1>
+<p class="subtitle">OVH VPS (Coolify) · Node.js/Hono · PostgreSQL · Minio · Claude API</p>
+
+<!-- ── LAYER 0 : USERS ── -->
+<div class="layer">
+  <div class="layer-label">Utilisateurs</div>
+  <div class="row">
+    <div class="box blue" style="max-width:220px">
+      <div class="box-title">👤 Administrateurs</div>
+      <div class="box-body">
+        <code>admin-psalm.a-e-f.fr</code><br>
+        Gèrent membres, planning,<br>chants, rotations, IA
+      </div>
+    </div>
+    <div class="box blue" style="max-width:220px">
+      <div class="box-title">👥 Membres équipe</div>
+      <div class="box-body">
+        <code>psalm.a-e-f.fr</code><br>
+        Consultent planning,<br>saisissent disponibilités,<br>gèrent absences
+      </div>
+    </div>
+    <div class="box slate" style="flex:2">
+      <div class="box-title">🔐 Authentification</div>
+      <div class="box-body">
+        JWT signé par Hono · Expiration 7j avec refresh token<br>
+        Reset mot de passe par email (Resend)<br>
+        <span class="tag" style="background:#0a1f12;color:#4ade80">Token dans localStorage</span>
+        <span class="tag" style="background:#0f1829;color:#818cf8">Header Authorization: Bearer</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">
+  <div class="arrow"><div class="arrow-label">HTTPS</div><div class="arrow-line"></div><div class="arrow-head"></div></div>
+  <div class="arrow"><div class="arrow-label">HTTPS</div><div class="arrow-line"></div><div class="arrow-head"></div></div>
+</div>
+
+<!-- ── LAYER 1 : FRONTENDS ── -->
+<div class="layer">
+  <div class="layer-label">Frontends — Coolify OVH VPS (builds statiques servis par Nginx)</div>
+  <div class="row">
+    <div class="box purple">
+      <div class="box-title">⚙️ PsalmAdmin</div>
+      <div class="box-body">
+        React 18 · TypeScript · Vite<br>
+        Tailwind + shadcn/ui<br>
+        <br>
+        <strong style="color:#e2e8f0">Zéro Supabase SDK</strong><br>
+        Tous les appels → <code>fetch()</code><br>
+        vers l'API Hono
+        <br><br>
+        <span class="tag" style="background:#140f2a;color:#c4b5fd">UUID Coolify : g5f2n17h...</span>
+      </div>
+    </div>
+    <div class="box purple">
+      <div class="box-title">📱 PsalmMembre</div>
+      <div class="box-body">
+        React 18 · TypeScript · Vite<br>
+        Tailwind + shadcn/ui<br>
+        <br>
+        <strong style="color:#e2e8f0">Zéro Supabase SDK</strong><br>
+        Tous les appels → <code>fetch()</code><br>
+        vers l'API Hono
+        <br><br>
+        <span class="tag" style="background:#140f2a;color:#c4b5fd">UUID Coolify : pp3lsyh7...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">
+  <div class="arrow"><div class="arrow-label">REST JSON</div><div class="arrow-line" style="background:#6366f1"></div><div class="arrow-head" style="border-top-color:#6366f1"></div></div>
+  <div class="arrow"><div class="arrow-label">REST JSON</div><div class="arrow-line" style="background:#6366f1"></div><div class="arrow-head" style="border-top-color:#6366f1"></div></div>
+</div>
+
+<!-- ── LAYER 2 : HONO API ── -->
+<div class="layer">
+  <div class="layer-label">API Backend — Coolify OVH VPS (Docker Node.js 22)</div>
+  <div class="box green" style="width:100%">
+    <div class="box-title" style="font-size:13px">🟢 Node.js / Hono API &nbsp;<span style="font-size:10px;font-weight:400;color:#64748b">api.a-e-f.fr (ou api-psalm.a-e-f.fr)</span></div>
+    <div class="row" style="margin-top:12px;gap:10px">
+      <div style="flex:1;min-width:120px;background:#061a0e;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #166534">
+        <div style="color:#4ade80;font-weight:700;margin-bottom:6px">Auth</div>
+        POST /auth/login<br>
+        POST /auth/logout<br>
+        POST /auth/refresh<br>
+        POST /auth/reset-password<br>
+        POST /auth/set-password
+      </div>
+      <div style="flex:1;min-width:120px;background:#061a0e;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #166534">
+        <div style="color:#4ade80;font-weight:700;margin-bottom:6px">Membres</div>
+        GET /members<br>
+        POST /members<br>
+        PUT /members/:id<br>
+        DELETE /members/:id<br>
+        GET /members/:id/absences
+      </div>
+      <div style="flex:1;min-width:120px;background:#061a0e;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #166534">
+        <div style="color:#4ade80;font-weight:700;margin-bottom:6px">Planning</div>
+        GET /planning/:year<br>
+        GET /planning/:year/:month<br>
+        POST /planning/sunday<br>
+        PUT /planning/sunday/:id<br>
+        DELETE /planning/sunday/:id
+      </div>
+      <div style="flex:1;min-width:120px;background:#061a0e;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #166534">
+        <div style="color:#4ade80;font-weight:700;margin-bottom:6px">Chants</div>
+        GET /songs<br>
+        POST /songs<br>
+        PUT /songs/:id<br>
+        DELETE /songs/:id<br>
+        POST /songs/:id/partition
+      </div>
+      <div style="flex:1;min-width:120px;background:#061a0e;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #166534">
+        <div style="color:#4ade80;font-weight:700;margin-bottom:6px">Divers</div>
+        GET /events<br>
+        POST /events<br>
+        GET /permissions<br>
+        PUT /permissions/:id<br>
+        GET /config
+      </div>
+      <div style="flex:1;min-width:120px;background:#0a0a1f;border-radius:8px;padding:10px;font-size:10px;color:#94a3b8;border:1px solid #4f46e5">
+        <div style="color:#818cf8;font-weight:700;margin-bottom:6px">✦ IA (module)</div>
+        POST /ai/chat<br>
+        GET /ai/sessions/:id<br>
+        DELETE /ai/sessions/:id<br>
+        <br>
+        <span style="color:#6366f1">Claude Sonnet 4.6<br>Tool use + caching</span>
+      </div>
+    </div>
+    <div class="secrets">
+      <div style="margin-top:10px;font-size:10px;color:#475569;width:100%">Secrets — uniquement sur le serveur :</div>
+      <div class="secret-pill">ANTHROPIC_API_KEY</div>
+      <div class="secret-pill">DATABASE_URL</div>
+      <div class="secret-pill">JWT_SECRET</div>
+      <div class="secret-pill">RESEND_API_KEY</div>
+      <div class="secret-pill">MINIO_SECRET</div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">
+  <div class="arrow"><div class="arrow-label">pg driver</div><div class="arrow-line" style="background:#38bdf8"></div><div class="arrow-head" style="border-top-color:#38bdf8"></div></div>
+  <div class="arrow"><div class="arrow-label">S3 API</div><div class="arrow-line" style="background:#38bdf8"></div><div class="arrow-head" style="border-top-color:#38bdf8"></div></div>
+  <div class="arrow"><div class="arrow-label">HTTPS</div><div class="arrow-line" style="background:#f59e0b"></div><div class="arrow-head" style="border-top-color:#f59e0b"></div></div>
+  <div class="arrow"><div class="arrow-label">SMTP/API</div><div class="arrow-line" style="background:#94a3b8"></div><div class="arrow-head" style="border-top-color:#94a3b8"></div></div>
+</div>
+
+<!-- ── LAYER 3 : DATA ── -->
+<div class="layer">
+  <div class="layer-label">Données & Services — OVH VPS + externes</div>
+  <div class="row">
+    <div class="box sky">
+      <div class="box-title">🗄 PostgreSQL</div>
+      <div class="box-body">
+        Coolify · Docker<br>
+        Migré depuis Supabase<br>
+        (même schéma)<br><br>
+        Tables : profiles · sundays<br>
+        songs · events · permissions<br>
+        config · sessions · audit_log
+      </div>
+    </div>
+    <div class="box sky">
+      <div class="box-title">🪣 Minio</div>
+      <div class="box-body">
+        Stockage objets S3-compatible<br>
+        Coolify · Docker<br><br>
+        Bucket : <code>songs</code><br>
+        (partitions PDF)<br><br>
+        Alt : Cloudflare R2 (gratuit 10GB)
+      </div>
+    </div>
+    <div class="box amber">
+      <div class="box-title">🤖 Anthropic API</div>
+      <div class="box-body">
+        claude-sonnet-4-6<br>
+        Tool use · Prompt caching<br>
+        Appelé uniquement<br>par Hono (clé jamais<br>dans le frontend)
+      </div>
+    </div>
+    <div class="box slate">
+      <div class="box-title">📧 Resend</div>
+      <div class="box-body">
+        Emails transactionnels<br>
+        Reset mot de passe<br>
+        Notifications planning<br><br>
+        Alt : SMTP OVH natif
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RÉSUMÉ SÉCURITÉ ── -->
+<div style="margin-top:24px;padding:16px;background:#0a1f12;border:1px solid #166534;border-radius:10px">
+  <div style="font-size:12px;font-weight:700;color:#4ade80;margin-bottom:10px">✅ Ce qui change côté sécurité</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#94a3b8">
+    <div>
+      <div style="color:#ef4444;font-weight:600;margin-bottom:4px">Avant</div>
+      🔴 Service key Supabase dans le bundle JS<br>
+      🔴 Clé Anthropic inaccessible (pas encore de module IA)<br>
+      🟡 Deux systèmes backend (PHP API + Supabase direct)<br>
+      🟡 PsalmMembre sécurisé par RLS côté Supabase
+    </div>
+    <div>
+      <div style="color:#4ade80;font-weight:600;margin-bottom:4px">Après</div>
+      ✅ Zéro secret dans le frontend<br>
+      ✅ Un seul backend TypeScript pour tout<br>
+      ✅ Auth JWT maîtrisée, sans dépendance externe<br>
+      ✅ Données sur votre VPS EU (RGPD)<br>
+      ✅ Module IA intégré nativement dans Hono
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-line" style="background:#6366f1"></div>Flux frontend → API</div>
+  <div class="legend-item"><div class="legend-line" style="background:#38bdf8"></div>Flux API → données</div>
+  <div class="legend-item"><div class="legend-line" style="background:#f59e0b"></div>Flux API → services externes</div>
+  <div style="margin-left:auto;font-size:10px;color:#475569">Tous les services OVH VPS tournent sous Coolify (Docker)</div>
+</div>
+
+</body>
+</html>

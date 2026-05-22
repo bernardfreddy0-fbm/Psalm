@@ -256,6 +256,25 @@ export async function savePermissions(matrix: Record<string, string[]>) {
   return { success: true };
 }
 
+// ── Permissions par membre (style Active Directory) ───────────────────────────
+
+export interface MemberPermissions {
+  via_role: string[];   // accordées par le rôle (lecture seule)
+  direct:   string[];   // accordées directement à l'utilisateur
+  effective: string[];  // union via_role ∪ direct
+}
+
+export const getMemberPermissions = async (memberId: string): Promise<MemberPermissions> => {
+  return apiFetch<MemberPermissions>(`/members/${memberId}/permissions`);
+};
+
+export const setMemberPermissions = async (memberId: string, permKeys: string[]): Promise<void> => {
+  await apiFetch(`/members/${memberId}/permissions`, {
+    method: 'PUT',
+    json: { permissions: permKeys },
+  });
+};
+
 // ── Events (multi-day) ────────────────────────────────────────────────────────
 
 export interface SpecialEvent {

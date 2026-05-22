@@ -1,0 +1,105 @@
+<h2>Architecture — Module IA PsalmAdmin</h2>
+<p class="subtitle">Approche C : contexte minimal injecté + outils Claude</p>
+
+<div class="section">
+  <h3>Vue d'ensemble</h3>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch">
+
+    <!-- Frontend -->
+    <div style="flex:1;min-width:180px;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;padding:14px">
+      <div style="color:#6366f1;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:8px">FRONTEND — PsalmAdmin</div>
+      <div style="font-size:12px;color:#e2e8f0;margin-bottom:6px">Page <code>/admin/ia</code></div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">
+        • Interface de chat (historique conversation)<br>
+        • Modale de confirmation pour actions<br>
+        • Appel POST → Node.js API
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;font-size:20px;color:#6366f1">⇄</div>
+
+    <!-- Node.js API -->
+    <div style="flex:1;min-width:200px;background:#1a1a2e;border:1px solid #4ade80;border-radius:8px;padding:14px">
+      <div style="color:#4ade80;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:8px">NODE.JS / HONO — OVH VPS</div>
+      <div style="font-size:12px;color:#e2e8f0;margin-bottom:6px">Endpoint <code>POST /ai/chat</code></div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">
+        1. Injecte contexte minimal (membres + planning)<br>
+        2. Appelle Claude avec historique + tools<br>
+        3. Exécute les tool calls (Supabase)<br>
+        4. Retourne réponse texte + actions proposées
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;font-size:20px;color:#4ade80">⇄</div>
+
+    <!-- Claude -->
+    <div style="flex:1;min-width:160px;background:#1a1a2e;border:1px solid #f59e0b;border-radius:8px;padding:14px">
+      <div style="color:#f59e0b;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:8px">ANTHROPIC API</div>
+      <div style="font-size:12px;color:#e2e8f0;margin-bottom:6px">claude-sonnet-4-6</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">
+        Modèle : Sonnet 4.6<br>
+        Tool use activé<br>
+        Prompt caching (contexte équipe)
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;font-size:20px;color:#f59e0b">⇄</div>
+
+    <!-- Supabase -->
+    <div style="flex:1;min-width:160px;background:#1a1a2e;border:1px solid #38bdf8;border-radius:8px;padding:14px">
+      <div style="color:#38bdf8;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:8px">SUPABASE</div>
+      <div style="font-size:12px;color:#e2e8f0;margin-bottom:6px">Base de données</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">
+        profiles, sundays,<br>
+        songs, events,<br>
+        permissions
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Contexte injecté (system prompt)</h3>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div style="background:#0f2a1a;border:1px solid #4ade80;border-radius:6px;padding:10px;font-size:11px;color:#4ade80;flex:1;min-width:140px">
+      <div style="font-weight:700;margin-bottom:4px">✓ Injecté systématiquement</div>
+      <div style="color:#94a3b8;line-height:1.7">
+        Liste membres actifs (nom, rôles)<br>
+        Planning mois en cours<br>
+        Règles métier AEF<br>
+        Pôles + rôles requis
+      </div>
+    </div>
+    <div style="background:#2a1a0f;border:1px solid #f59e0b;border-radius:6px;padding:10px;font-size:11px;color:#f59e0b;flex:1;min-width:140px">
+      <div style="font-weight:700;margin-bottom:4px">⚡ Chargé via outils</div>
+      <div style="color:#94a3b8;line-height:1.7">
+        Historique planning (N mois)<br>
+        Rapport d'équité<br>
+        Absences d'une période<br>
+        Catalogue chants<br>
+        Actions d'écriture
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Flux d'une requête</h3>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px">
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;color:#e2e8f0">Admin pose une question</div>
+    <div style="color:#6366f1">→</div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;color:#e2e8f0">POST /ai/chat<br><span style="color:#64748b">{messages, session_id}</span></div>
+    <div style="color:#6366f1">→</div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;color:#e2e8f0">Contexte injecté<br><span style="color:#64748b">+ historique session</span></div>
+    <div style="color:#6366f1">→</div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;color:#e2e8f0">Claude répond<br><span style="color:#64748b">± tool calls</span></div>
+    <div style="color:#6366f1">→</div>
+    <div style="background:#1e1e3a;border-radius:6px;padding:8px 12px;color:#4ade80">Réponse + actions<br><span style="color:#64748b">JSON structuré</span></div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px">Est-ce que cette architecture te convient ?</p>

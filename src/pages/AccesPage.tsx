@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getAllAccounts, updateMember, createMember,
   resetMemberPassword, getPermissions, savePermissions,
+  getMemberPermissions, setMemberPermissions,
+  type MemberPermissions,
 } from '@/lib/api';
 import { generateSecurePassword } from '@/lib/security';
 import {
@@ -209,6 +211,42 @@ function MemberDetail({
   const [newPwd, setNewPwd] = useState('');
   const [resetting, setResetting] = useState(false);
 
+  // ── Permissions directes par membre (style Active Directory) ──────────────
+  const { data: memberPerms, isLoading: permsLoading, refetch: refetchPerms } = useQuery<MemberPermissions>({
+    queryKey: ['member-permissions', user.id],
+    queryFn: () => getMemberPermissions(user.id),
+    staleTime: 60000,
+  });
+  const [localDirect, setLocalDirect] = useState<string[]>([]);
+  const [savingPerms, setSavingPerms] = useState(false);
+
+  // Sync local state quand les données arrivent
+  useEffect(() => {
+    if (memberPerms) setLocalDirect(memberPerms.direct ?? []);
+  }, [memberPerms]);
+
+  const dirtyPerms = useMemo(() =>
+    JSON.stringify([...(localDirect)].sort()) !== JSON.stringify([...(memberPerms?.direct ?? [])].sort()),
+    [localDirect, memberPerms],
+  );
+
+  function toggleDirect(action: string) {
+    setLocalDirect(prev =>
+      prev.includes(action) ? prev.filter(a => a !== action) : [...prev, action]
+    );
+  }
+
+  async function savePerms() {
+    setSavingPerms(true);
+    try {
+      await setMemberPermissions(user.id, localDirect);
+      await refetchPerms();
+      toast.success('Accès individuels enregistrés');
+    } catch (err: any) {
+      toast.error('Erreur', { description: err.message });
+    } finally { setSavingPerms(false); }
+  }
+
   const userRoles = parseRoles(user.role);
 
   function toggleRole(r: string) {
@@ -216,15 +254,6 @@ function MemberDetail({
       prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
     );
   }
-
-  // Permissions accordées via les rôles du membre
-  const granted = useMemo(() => {
-    const set = new Set<string>();
-    userRoles.forEach(role => {
-      (matrix[role] ?? []).forEach(a => set.add(a));
-    });
-    return set;
-  }, [userRoles, matrix]);
 
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
@@ -344,31 +373,99 @@ function MemberDetail({
           )}
         </section>
 
-        {/* Permissions accordées */}
+        {/* Permissions — UI 3 états (style Active Directory) */}
         <section>
-          <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
-            <Shield className="w-3 h-3" /> Accès accordés via le rôle
-          </h4>
-          <div className="space-y-3">
-            {PERM_ACTIONS.map(group => (
-              <div key={group.group}>
-                <p className="text-[10px] text-muted-foreground mb-1">{group.group}</p>
-                <div className="space-y-1">
-                  {group.actions.map(action => {
-                    const ok = granted.has(action);
-                    return (
-                      <div key={action} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${ok ? 'bg-green-50 dark:bg-green-950/30' : 'opacity-40'}`}>
-                        {ok
-                          ? <Check className="w-3 h-3 text-green-600 shrink-0" />
-                          : <X className="w-3 h-3 text-muted-foreground shrink-0" />}
-                        <span className={ok ? 'text-foreground' : 'text-muted-foreground'}>{ACTION_LABELS[action] ?? action}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Shield className="w-3 h-3" /> Accès & Permissions
+            </h4>
+            {dirtyPerms && (
+              <button
+                onClick={savePerms}
+                disabled={savingPerms}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground text-[10px] font-medium disabled:opacity-50"
+              >
+                <Save className="w-2.5 h-2.5" />
+                {savingPerms ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            )}
           </div>
+
+          {/* Légende */}
+          <div className="flex items-center gap-3 mb-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500/40 flex items-center justify-center"><Check className="w-2 h-2 text-blue-600" /></span> Via rôle (lecture seule)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500/20 border border-green-500/40 flex items-center justify-center"><Check className="w-2 h-2 text-green-600" /></span> Direct (individuel)</span>
+          </div>
+
+          {permsLoading ? (
+            <div className="flex justify-center py-4"><div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" /></div>
+          ) : (
+            <div className="space-y-3">
+              {PERM_ACTIONS.map(group => (
+                <div key={group.group}>
+                  <p className="text-[10px] text-muted-foreground font-semibold mb-1">{group.group}</p>
+                  <div className="space-y-1">
+                    {group.actions.map(action => {
+                      const viaRole  = (memberPerms?.via_role ?? []).includes(action);
+                      const isDirect = localDirect.includes(action);
+                      const effective = viaRole || isDirect;
+
+                      return (
+                        <div key={action}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                            viaRole   ? 'bg-blue-50 dark:bg-blue-950/20' :
+                            isDirect  ? 'bg-green-50 dark:bg-green-950/20' :
+                            'opacity-50 hover:opacity-80'
+                          }`}
+                        >
+                          {/* Indicateur via-rôle (lecture seule) */}
+                          <div
+                            title={viaRole ? 'Accordé via le rôle (non modifiable ici)' : undefined}
+                            className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${
+                              viaRole
+                                ? 'bg-blue-500/20 border-blue-500/60 cursor-not-allowed'
+                                : 'border-border'
+                            }`}
+                          >
+                            {viaRole && <Check className="w-2.5 h-2.5 text-blue-600" />}
+                          </div>
+
+                          {/* Indicateur direct (cliquable) */}
+                          <button
+                            type="button"
+                            disabled={viaRole} // si déjà via rôle, pas besoin de duplication
+                            onClick={() => !viaRole && toggleDirect(action)}
+                            title={viaRole ? 'Déjà accordé via le rôle' : isDirect ? 'Retirer l\'accès direct' : 'Accorder un accès direct'}
+                            className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                              viaRole
+                                ? 'border-border opacity-30 cursor-not-allowed'
+                                : isDirect
+                                  ? 'bg-green-500/20 border-green-500/60 hover:bg-green-500/30 cursor-pointer'
+                                  : 'border-border hover:border-green-400 cursor-pointer'
+                            }`}
+                          >
+                            {isDirect && !viaRole && <Check className="w-2.5 h-2.5 text-green-600" />}
+                          </button>
+
+                          <span className={effective ? 'text-foreground' : 'text-muted-foreground'}>
+                            {ACTION_LABELS[action] ?? action}
+                          </span>
+
+                          {/* Badge source */}
+                          {viaRole && (
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20 font-medium">rôle</span>
+                          )}
+                          {isDirect && !viaRole && (
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 border border-green-500/20 font-medium">direct</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Reset mot de passe */}

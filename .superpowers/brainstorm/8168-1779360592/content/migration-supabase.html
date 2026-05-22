@@ -1,0 +1,76 @@
+<h2>Migrer Supabase → OVH VPS ?</h2>
+<p class="subtitle">Comparaison de l'architecture actuelle vs migration complète vs approche progressive</p>
+
+<div class="section">
+  <h3 style="color:#ef4444">Situation actuelle — problèmes connus</h3>
+  <div style="background:#1a0f0f;border:1px solid #ef4444;border-radius:8px;padding:14px;font-size:11px;line-height:1.8;color:#94a3b8">
+    🔴 <strong style="color:#fca5a5">VITE_SUPABASE_SERVICE_KEY</strong> exposée dans le bundle JS → n'importe qui peut lire/modifier la DB<br>
+    🟡 Dépendance externe Supabase (coût, RGPD, disponibilité)<br>
+    🟡 Supabase Auth intégré partout (login, reset password, sessions)<br>
+    🟡 Fichiers partitions stockés dans Supabase Storage
+  </div>
+</div>
+
+<div class="cards">
+
+  <div class="card" data-choice="keep" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3 style="color:#f59e0b">Option A — Garder Supabase</h3>
+      <p style="font-size:11px;color:#94a3b8;line-height:1.7">
+        Node.js/Hono gère <em>uniquement</em> les appels IA.<br>
+        Le frontend appelle toujours Supabase directement.<br>
+        La service key reste exposée côté frontend.
+      </p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pour</h4><ul><li>Rapide à implémenter</li><li>Rien à migrer</li></ul></div>
+        <div class="cons"><h4>Contre</h4><ul><li>Service key toujours exposée</li><li>Problème sécurité non résolu</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="progressive" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3 style="color:#4ade80">Option B — Migration progressive <span style="background:#4ade80;color:#000;padding:1px 6px;border-radius:4px;font-size:10px;margin-left:6px">Recommandée</span></h3>
+      <p style="font-size:11px;color:#94a3b8;line-height:1.7">
+        Node.js/Hono devient <em>l'unique point d'entrée</em> du frontend.<br>
+        Il appelle Supabase côté serveur (service key cachée).<br>
+        Plus tard, on remplace Supabase par PostgreSQL self-hosted sans toucher au frontend.
+      </p>
+      <div style="margin:10px 0;padding:8px;background:#0f2a1a;border-radius:6px;font-size:10px;color:#4ade80">
+        Frontend → Hono API → Supabase (phase 1)<br>
+        Frontend → Hono API → PostgreSQL OVH (phase 2, plus tard)
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pour</h4><ul><li>Service key sécurisée dès phase 1</li><li>Migration Supabase optionnelle, sans refonte frontend</li><li>RGPD : données restent EU</li></ul></div>
+        <div class="cons"><h4>Contre</h4><ul><li>Réécrire tous les appels frontend (Supabase client → fetch Hono)</li><li>Auth à migrer (Supabase Auth → JWT custom ou better-auth)</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="full" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3 style="color:#38bdf8">Option C — Migration complète maintenant</h3>
+      <p style="font-size:11px;color:#94a3b8;line-height:1.7">
+        PostgreSQL self-hosted sur OVH VPS (via Coolify).<br>
+        Auth custom (better-auth ou Lucia).<br>
+        Stockage fichiers : Minio sur VPS.<br>
+        Frontend appelle uniquement l'API Hono.
+      </p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pour</h4><ul><li>Autonomie totale</li><li>Zéro dépendance externe</li><li>Coût minimal</li></ul></div>
+        <div class="cons"><h4>Contre</h4><ul><li>Gros chantier (3-4 semaines)</li><li>Backups, maintenance DB à gérer soi-même</li><li>Migration données à orchestrer</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>Ce que "Migration progressive" change pour le module IA</h3>
+  <div style="font-size:11px;color:#94a3b8;line-height:1.8;background:#1e1e3a;padding:12px;border-radius:6px">
+    ✅ Les outils IA n'appellent <em>jamais</em> Supabase directement<br>
+    ✅ Ils appellent des endpoints Hono internes : <code>GET /api/members</code>, <code>GET /api/planning/:year</code>...<br>
+    ✅ Quand on migre la DB plus tard, seul Hono change — le module IA reste intact<br>
+    ✅ La clé Anthropic est sur Hono, la service key Supabase est sur Hono → 0 secret dans le frontend
+  </div>
+</div>
