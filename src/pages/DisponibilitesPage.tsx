@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getDisponibilitesAdmin, getAbsencesAdmin, deleteAbsenceAdmin, setDispoDeadline,
-  type SundayDispo, type AdminAbsence,
+  type SundayDispo, type AdminAbsence, type NonRespondant,
 } from '@/lib/api';
-import { Calendar, Users, CheckCircle, XCircle, Clock, AlertTriangle, Trash2, CalendarOff } from 'lucide-react';
+import { Calendar, Users, CheckCircle, XCircle, Clock, AlertTriangle, Trash2, CalendarOff, Bell, Copy, Check as CheckIcon } from 'lucide-react';
 
 type Tab = 'dispos' | 'absences';
 
@@ -85,6 +85,116 @@ function DispoCard({ sunday }: { sunday: SundayDispo }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Panneau de relances ───────────────────────────────────────────────────────
+
+function ReminderPanel({ dispos }: { dispos: SundayDispo[] }) {
+  const [copied, setCopied] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+
+  // Prochains dimanches avec des non-répondants, deadline non dépassée
+  const actionable = dispos
+    .filter(d => d.date >= today && d.non_respondants.length > 0)
+    .slice(0, 3);
+
+  if (actionable.length === 0) return null;
+
+  const next = actionable[0];
+  const daysUntil = next.dispo_deadline
+    ? Math.ceil((new Date(next.dispo_deadline).getTime() - Date.now()) / 86400000)
+    : null;
+  const urgent = daysUntil !== null && daysUntil <= 3;
+
+  function copyNames(members: NonRespondant[]) {
+    const text = members.map(m => `${m.first_name} ${m.last_name}`).join(', ');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function copyWhatsApp(sunday: SundayDispo) {
+    const names = sunday.non_respondants.map(m => m.first_name).join(', ');
+    const date = new Date(sunday.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const deadline = sunday.dispo_deadline
+      ? new Date(sunday.dispo_deadline + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+      : null;
+    const msg = [
+      `🔔 *Rappel disponibilités — ${date}*`,
+      '',
+      `Les membres suivants n'ont pas encore répondu :`,
+      names,
+      '',
+      deadline ? `⏰ Deadline : ${deadline}` : '',
+      `Merci de répondre dès que possible sur Psalm : https://psalm.a-e-f.fr`,
+    ].filter(Boolean).join('\n');
+    navigator.clipboard.writeText(msg).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className={`border rounded-xl p-4 space-y-3 ${urgent ? 'border-orange-500/30 bg-orange-500/5' : 'border-primary/20 bg-primary/5'}`}>
+      <div className="flex items-center gap-2">
+        <Bell size={14} className={urgent ? 'text-orange-400' : 'text-primary'} />
+        <h3 className="text-sm font-semibold text-foreground">
+          Relances à envoyer
+        </h3>
+        {daysUntil !== null && (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto ${
+            urgent ? 'bg-orange-500/15 text-orange-400' : 'bg-primary/10 text-primary'
+          }`}>
+            {daysUntil <= 0 ? 'Délai dépassé' : `Deadline dans ${daysUntil}j`}
+          </span>
+        )}
+      </div>
+
+      {actionable.map(sunday => {
+        const dateStr = new Date(sunday.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+        return (
+          <div key={sunday.sunday_id} className="bg-card border border-border rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="text-sm font-semibold text-foreground">{dateStr}</span>
+                {sunday.label && <span className="text-xs text-muted-foreground ml-2">{sunday.label}</span>}
+                <span className="text-xs text-muted-foreground ml-2">
+                  — <span className="text-orange-400 font-medium">{sunday.non_respondants.length} sans réponse</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => copyNames(sunday.non_respondants)}
+                  title="Copier les noms"
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {copied ? <CheckIcon size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                  Noms
+                </button>
+                <button
+                  onClick={() => copyWhatsApp(sunday)}
+                  title="Copier message WhatsApp"
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium transition-colors"
+                >
+                  {copied ? <CheckIcon size={11} /> : <Copy size={11} />}
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {sunday.non_respondants.map(m => (
+                <span key={m.user_id} className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  {m.first_name} {m.last_name}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -210,14 +320,17 @@ export default function DisponibilitesPage() {
       </div>
 
       {tab === 'dispos' && (
-        <div className="space-y-2">
-          {loadingDispos ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Chargement...</p>
-          ) : dispos.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Aucun dimanche pour {year}</p>
-          ) : (
-            dispos.map(d => <DispoCard key={d.sunday_id} sunday={d} />)
-          )}
+        <div className="space-y-4">
+          <ReminderPanel dispos={upcomingDispos} />
+          <div className="space-y-2">
+            {loadingDispos ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Chargement...</p>
+            ) : dispos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Aucun dimanche pour {year}</p>
+            ) : (
+              dispos.map(d => <DispoCard key={d.sunday_id} sunday={d} />)
+            )}
+          </div>
         </div>
       )}
 

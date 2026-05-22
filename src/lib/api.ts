@@ -664,6 +664,13 @@ export interface DispoEntry {
   responded_at: string | null;
 }
 
+export interface NonRespondant {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+}
+
 export interface SundayDispo {
   sunday_id: string;
   date: string;
@@ -671,6 +678,7 @@ export interface SundayDispo {
   is_jeunesse: boolean;
   dispo_deadline: string | null;
   responses: DispoEntry[];
+  non_respondants: NonRespondant[];
   total_members: number;
   responded_count: number;
   available_count: number;
@@ -678,46 +686,33 @@ export interface SundayDispo {
 
 export async function getDisponibilitesAdmin(year?: number): Promise<SundayDispo[]> {
   const y = year ?? new Date().getFullYear();
-  const [sundaysData, disposData, membersData] = await Promise.all([
-    apiFetch<any[]>(`/planning/${y}`),
-    apiFetch<any[]>('/disponibilites'),
-    apiFetch<any[]>('/members'),
-  ]);
-
-  const sundays = (sundaysData || []).filter((s: any) => s.date >= `${y}-01-01` && s.date <= `${y}-12-31`);
-  const dispos = disposData || [];
-  const totalMembers = (membersData || []).filter((m: any) => m.is_active && m.first_name !== '[Supprimé]').length;
-
-  const dispoMap = new Map<string, DispoEntry[]>();
-  for (const d of dispos) {
-    const entry: DispoEntry = {
-      user_id: d.user_id,
-      first_name: d.first_name || '',
-      last_name: d.last_name || '',
-      role: d.role || '',
-      available: d.available,
-      note: d.note,
-      responded_at: d.responded_at,
-    };
-    const key = String(d.sunday_id);
-    if (!dispoMap.has(key)) dispoMap.set(key, []);
-    dispoMap.get(key)!.push(entry);
-  }
-
-  return sundays.map((s: any) => {
-    const responses = dispoMap.get(String(s.id)) || [];
-    return {
-      sunday_id: String(s.id),
-      date: s.date,
-      label: s.label,
-      is_jeunesse: s.is_jeunesse,
-      dispo_deadline: s.dispo_deadline || null,
-      responses,
-      total_members: totalMembers,
-      responded_count: responses.length,
-      available_count: responses.filter(r => r.available === true).length,
-    };
-  });
+  // Utilise l'endpoint admin dédié qui retourne toutes les réponses + non_respondants
+  const data = await apiFetch<any[]>(`/disponibilites/admin?year=${y}`);
+  return (data || []).map((s: any) => ({
+    sunday_id: String(s.sunday_id),
+    date: s.date,
+    label: s.label ?? '',
+    is_jeunesse: !!s.is_jeunesse,
+    dispo_deadline: s.dispo_deadline ?? null,
+    responses: (s.responses ?? []).map((r: any) => ({
+      user_id: r.user_id,
+      first_name: r.first_name ?? '',
+      last_name: r.last_name ?? '',
+      role: r.role ?? '',
+      available: r.available ?? null,
+      note: r.note ?? null,
+      responded_at: r.responded_at ?? null,
+    })),
+    non_respondants: (s.non_respondants ?? []).map((m: any) => ({
+      user_id: m.user_id,
+      first_name: m.first_name ?? '',
+      last_name: m.last_name ?? '',
+      role: m.role ?? '',
+    })),
+    total_members: s.total_members ?? 0,
+    responded_count: s.responded_count ?? 0,
+    available_count: s.available_count ?? 0,
+  }));
 }
 
 export async function setDispoDeadline(sundayId: string, deadline: string | null): Promise<void> {
