@@ -41,7 +41,7 @@ const navSections = [
     label: 'CULTE',
     items: [
       { to: '/predications', icon: BookOpen, label: 'Prédications' },
-      { to: '/archives', icon: Video, label: 'Archives vidéo' },
+      { to: '/archives', icon: Video, label: 'AEFV' },
     ],
   },
   {
@@ -69,7 +69,7 @@ const pageTitles: Record<string, string> = {
   '/journal': 'Journal d\'activité',
   '/configuration': 'Configuration',
   '/disponibilites': 'Disponibilités & Absences',
-  '/archives': 'Archives vidéo',
+  '/archives': 'AEFV',
   '/predications': 'Prédications',
   '/admin': 'Administration',
 };

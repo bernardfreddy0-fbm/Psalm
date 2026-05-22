@@ -66,7 +66,7 @@ export default function ArchivesAdminPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-foreground">Archives vidéo</h1>
+        <h1 className="text-lg font-bold text-foreground">AEFV</h1>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="text-emerald-500 font-semibold">{doneCount}</span> publiées ·{' '}
           <span className="text-amber-400 font-semibold">{pendingCount}</span> en cours
