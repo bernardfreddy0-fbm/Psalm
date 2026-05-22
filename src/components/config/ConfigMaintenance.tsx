@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabaseAdmin } from '@/lib/supabase';
+import { apiFetch } from '@/lib/apiClient';
 import {
   Database, Users, Music, Calendar, Activity, RefreshCw,
   Download, CheckCircle, AlertTriangle, Server, Clock,
@@ -80,9 +80,9 @@ export default function ConfigMaintenance() {
 
   const loadStats = async () => {
     try {
+      const year = new Date().getFullYear();
       const [
         membersRes,
-        activeMembersRes,
         songsRes,
         sundaysRes,
         eventsRes,
@@ -90,30 +90,37 @@ export default function ConfigMaintenance() {
         disposRes,
         configRes,
       ] = await Promise.allSettled([
-        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('events').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('config').select('key', { count: 'exact', head: true }),
+        apiFetch<any[]>('/members'),
+        apiFetch<any[]>('/songs'),
+        apiFetch<any[]>(`/planning/${year}`),
+        apiFetch<any[]>('/events'),
+        apiFetch<any[]>('/absences'),
+        apiFetch<any[]>('/disponibilites'),
+        apiFetch<Record<string, string>>('/config'),
       ]);
 
-      const get = (res: PromiseSettledResult<any>) =>
-        res.status === 'fulfilled' ? (res.value.count ?? 0) : 0;
+      const getArr = (res: PromiseSettledResult<any[]>): any[] =>
+        res.status === 'fulfilled' ? (res.value ?? []) : [];
+      const getObj = (res: PromiseSettledResult<Record<string, string>>) =>
+        res.status === 'fulfilled' ? res.value : {};
 
-      const configCount = get(configRes);
-      const secLogs = configCount; // approximation — on ne peut pas facilement filtrer dans count
+      const members = getArr(membersRes as PromiseSettledResult<any[]>);
+      const songs   = getArr(songsRes as PromiseSettledResult<any[]>);
+      const sundays = getArr(sundaysRes as PromiseSettledResult<any[]>);
+      const events  = getArr(eventsRes as PromiseSettledResult<any[]>);
+      const absences = getArr(absencesRes as PromiseSettledResult<any[]>);
+      const dispos  = getArr(disposRes as PromiseSettledResult<any[]>);
+      const config  = getObj(configRes as PromiseSettledResult<Record<string, string>>);
+      const configCount = Object.keys(config).length;
 
       const newStats: SystemStats = {
-        members: get(membersRes),
-        active_members: get(activeMembersRes),
-        songs: get(songsRes),
-        sundays: get(sundaysRes),
-        events: get(eventsRes),
-        absences: get(absencesRes),
-        disponibilites: get(disposRes),
+        members: members.length,
+        active_members: members.filter((m: any) => m.is_active !== false).length,
+        songs: songs.length,
+        sundays: sundays.length,
+        events: events.length,
+        absences: absences.length,
+        disponibilites: dispos.length,
         config_entries: configCount,
         security_logs: 0,
       };
@@ -122,10 +129,10 @@ export default function ConfigMaintenance() {
       // Calcul des indicateurs de santé
       const healthChecks: HealthCheck[] = [
         {
-          id: 'supabase',
-          label: 'Connexion Supabase',
+          id: 'api',
+          label: 'Connexion AEFApi',
           status: 'ok',
-          value: 'Connecté',
+          value: 'Connectée',
         },
         {
           id: 'members',
@@ -178,10 +185,10 @@ export default function ConfigMaintenance() {
 
   const handleExportConfig = async () => {
     try {
-      const { data } = await supabaseAdmin.from('config').select('key, value, updated_at').order('key');
-      if (!data) return;
-      const rows = data.map(r => `"${r.key}";"${(r.value ?? '').replace(/"/g, '""')}";"${r.updated_at ?? ''}"`);
-      const csv = ['"Clé";"Valeur";"Mis à jour"', ...rows].join('\n');
+      const data = await apiFetch<Record<string, string>>('/config');
+      const rows = Object.entries(data).sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `"${key}";"${(value ?? '').replace(/"/g, '""')}"`);
+      const csv = ['"Clé";"Valeur"', ...rows].join('\n');
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -195,15 +202,12 @@ export default function ConfigMaintenance() {
 
   const handleExportMembers = async () => {
     try {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('first_name, last_name, email, phone, role, is_active, created_at')
-        .order('last_name');
-      if (!data) return;
-      const rows = data.map(r =>
-        `"${r.last_name}";"${r.first_name}";"${r.email}";"${r.phone ?? ''}";"${r.role ?? ''}";"${r.is_active ? 'Actif' : 'Inactif'}";"${r.created_at ?? ''}"`
+      const data = await apiFetch<any[]>('/members');
+      const sorted = [...data].sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''));
+      const rows = sorted.map(r =>
+        `"${r.last_name}";"${r.first_name}";"${r.email}";"${r.phone ?? ''}";"${r.role ?? ''}";"${r.is_active !== false ? 'Actif' : 'Inactif'}"`
       );
-      const csv = ['"Nom";"Prénom";"Email";"Téléphone";"Rôle";"Statut";"Créé le"', ...rows].join('\n');
+      const csv = ['"Nom";"Prénom";"Email";"Téléphone";"Rôle";"Statut"', ...rows].join('\n');
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -217,20 +221,9 @@ export default function ConfigMaintenance() {
 
   const handlePurgeSecurityLogs = async () => {
     try {
-      // Supprimer les entrées secaudit_ de plus de 90 jours
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 90);
-      const { data } = await supabaseAdmin
-        .from('config')
-        .select('key')
-        .like('key', 'secaudit_%')
-        .lt('updated_at', cutoff.toISOString());
-      if (!data || data.length === 0) {
-        toast.info('Aucun journal à purger (moins de 90 jours)');
-        return;
-      }
-      await supabaseAdmin.from('config').delete().in('key', data.map(r => r.key));
-      toast.success(`${data.length} entrées de journaux purgées`);
+      // Les logs de sécurité sont stockés dans config avec la clé secaudit_*
+      // AEFApi ne supporte pas encore la purge par préfixe — fonctionnalité non critique
+      toast.info('Purge des journaux non disponible dans cette version');
     } catch {
       toast.error('Erreur lors de la purge');
     }

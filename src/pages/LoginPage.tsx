@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, ShieldAlert, AlertTriangle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { apiFetch } from '@/lib/apiClient';
 import {
   isLockedOut, getLockoutRemainingSeconds, getRemainingAttempts,
   recordFailedAttempt, resetRateLimit, isValidEmail,
@@ -86,8 +86,9 @@ export default function LoginPage() {
     try {
       // Toujours afficher "lien envoyé" même si l'email n'existe pas
       // (prévention de l'énumération des comptes)
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/admin/reset-password`,
+      await apiFetch('/auth/reset-password', {
+        method: 'POST',
+        json: { email, app: 'admin' },
       });
       setResetSent(true);
       setError('');

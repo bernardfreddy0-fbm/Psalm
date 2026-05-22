@@ -1,13 +1,7 @@
-import { supabase, supabaseAdmin } from './supabase';
+import { apiFetch, apiUpload, getToken, setTokens, clearTokens } from './apiClient';
 import { generateSecurePassword } from './security';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function throwIfError<T>(data: T | null, error: { message: string } | null): T {
-  if (error) throw new Error(error.message);
-  if (data === null) throw new Error('Aucune donnée');
-  return data;
-}
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   responsable_louange: 'conducteur_louange',
@@ -32,48 +26,29 @@ function normalizeMember(member: any) {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export function setToken(_token: string) { /* géré par Supabase */ }
-export function clearToken() { supabase.auth.signOut(); }
-
-function translateSupabaseError(msg: string): string {
-  const map: Record<string, string> = {
-    'Invalid login credentials': 'Identifiants incorrects',
-    'Email not confirmed': 'Email non confirmé — vérifiez votre boîte mail',
-    'User not found': 'Aucun compte associé à cet email',
-    'Too many requests': 'Trop de tentatives — réessayez dans quelques minutes',
-    'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères',
-    'User already registered': 'Un compte existe déjà avec cet email',
-    'Unable to validate email address': 'Adresse email invalide',
-    'Signup is disabled': 'Les inscriptions sont désactivées',
-  };
-  for (const [en, fr] of Object.entries(map)) {
-    if (msg.includes(en)) return fr;
-  }
-  return msg;
+export function setToken(token: string) {
+  localStorage.setItem('aef_admin_token', token);
+}
+export function clearToken() {
+  clearTokens();
 }
 
 export async function login(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(translateSupabaseError(error.message));
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, role, phone')
-    .eq('id', data.user.id)
-    .single();
-
+  const res = await apiFetch<{ access_token: string; refresh_token?: string; user?: any }>('/auth/login', {
+    method: 'POST',
+    json: { email, password },
+  });
+  setTokens(res.access_token, res.refresh_token ?? '');
+  // Récupérer le profil courant après login
+  const profile = await apiFetch<any>('/members/me');
   return profile;
 }
 
 export async function checkAuth() {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, email, role, phone')
-      .eq('id', session.user.id)
-      .single();
+    const token = getToken();
+    if (!token) return null;
+    const profile = await apiFetch<any>('/members/me');
     return profile;
   } catch {
     return null;
@@ -81,73 +56,52 @@ export async function checkAuth() {
 }
 
 export async function logout() {
-  await supabase.auth.signOut();
+  clearTokens();
 }
 
 // ── Members ───────────────────────────────────────────────────────────────────
 
-export const getMembers = () =>
-  supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color')
-    .order('last_name')
-    .then(({ data, error }) => {
-      throwIfError(data, error);
-      return (data || []).filter(isActiveMember).map(normalizeMember);
-    });
+export const getMembers = async () => {
+  const data = await apiFetch<any[]>('/members');
+  return (data || []).filter(isActiveMember).map(normalizeMember);
+};
 
 // Version complète pour la gestion DSI (inclut created_at + tous les inactifs)
 export const getAllAccounts = async () => {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id, first_name, last_name, email, phone, role, is_active, instrument, is_experienced, avatar_color, created_at, updated_at')
-    .neq('first_name', '[Supprimé]')
-    .order('last_name');
-  throwIfError(data, error);
-  return (data || []).map(normalizeMember);
+  const data = await apiFetch<any[]>('/members');
+  return (data || [])
+    .filter((m: any) => m.first_name !== '[Supprimé]')
+    .map(normalizeMember);
 };
 
 export const createMember = async (data: { first_name: string; last_name: string; email: string; role: string; phone?: string; instrument?: string; password?: string }) => {
-  // Utilise le mot de passe fourni (affiché à l'admin) ou en génère un aléatoire
   const passwordUsed = data.password ?? generateSecurePassword(16);
-
-  // Create auth user via Supabase Admin SDK
-  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-    email: data.email,
-    password: passwordUsed,
-    email_confirm: true,
+  const res = await apiFetch<{ id: string; password: string }>('/members', {
+    method: 'POST',
+    json: {
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      role: data.role,
+      phone: data.phone || null,
+      instrument: data.instrument || null,
+      password: passwordUsed,
+      is_active: true,
+    },
   });
-  if (authErr) throw new Error(authErr.message);
-  const userId = authData.user.id;
-
-  // Create profile row
-  const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
-    id: userId,
-    first_name: data.first_name,
-    last_name: data.last_name,
-    email: data.email,
-    role: data.role,
-    phone: data.phone || null,
-    instrument: data.instrument || null,
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  });
-  if (profileErr) throw new Error(profileErr.message);
   await logSecurityEvent('account_created', { target_email: data.email, role: data.role }).catch(() => {});
-  return { id: userId, password: passwordUsed };
+  return { id: res.id, password: res.password ?? passwordUsed };
 };
 
 export const updateMember = async (id: string, data: Record<string, any>) => {
-  const payload: any = { ...data, updated_at: new Date().toISOString() };
+  const payload: any = { ...data };
   if (data.is_active !== undefined) payload.is_active = data.is_active !== '0' && data.is_active !== false;
-  const { error } = await supabaseAdmin.from('profiles').update(payload).eq('id', id);
-  if (error) throw new Error(error.message);
+  await apiFetch(`/members/${id}`, { method: 'PUT', json: payload });
   return { success: true };
 };
 
 export const updateMemberEmail = async (userId: string, newEmail: string) => {
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail });
-  if (error) throw new Error(error.message);
+  await apiFetch(`/members/${userId}/email`, { method: 'PUT', json: { email: newEmail } });
   return { success: true };
 };
 
@@ -155,13 +109,12 @@ export const updateMemberEmail = async (userId: string, newEmail: string) => {
 
 export async function logSecurityEvent(event: string, meta?: Record<string, any>) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const actor = session?.user?.email ?? 'system';
+    const token = getToken();
+    const actor = token ? 'admin' : 'system';
     const key = `secaudit_${Date.now()}_${event}`;
-    await supabaseAdmin.from('config').insert({
-      key,
-      value: JSON.stringify({ event, actor, meta, ts: new Date().toISOString() }),
-      updated_at: new Date().toISOString(),
+    await apiFetch(`/config/${key}`, {
+      method: 'PUT',
+      json: { value: JSON.stringify({ event, actor, meta, ts: new Date().toISOString() }) },
     });
   } catch {
     // Log silencieux — ne jamais bloquer l'action principale
@@ -170,31 +123,12 @@ export async function logSecurityEvent(event: string, meta?: Record<string, any>
 }
 
 export const deleteMember = async (id: string) => {
-  // Étape 1 — Supprimer l'accès Auth Supabase (révoque immédiatement toute connexion)
-  const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(id);
-  if (authErr) throw new Error(authErr.message);
-
-  // Étape 2 — Anonymiser le profil (conformité RGPD, préserve l'historique des FK)
-  const { error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .update({
-      first_name: '[Supprimé]',
-      last_name: '',
-      email: `deleted_${id.slice(0, 8)}@supprime.local`,
-      phone: null,
-      is_active: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
-  if (profileErr) throw new Error(profileErr.message);
-
-  // Étape 3 — Journal d'audit (silencieux si table absente)
+  await apiFetch(`/members/${id}`, { method: 'DELETE' });
   await logSecurityEvent('account_deleted', { target_id: id }).catch(() => {});
 };
 
 export const resetMemberPassword = async (userId: string, newPassword: string) => {
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
-  if (error) throw new Error(error.message);
+  await apiFetch(`/members/${userId}`, { method: 'PUT', json: { password: newPassword } });
   await logSecurityEvent('password_reset', { target_id: userId }).catch(() => {});
   return { success: true };
 };
@@ -202,51 +136,29 @@ export const resetMemberPassword = async (userId: string, newPassword: string) =
 // ── Planning / Sundays ───────────────────────────────────────────────────────
 
 export const getPlanning = async (year: number) => {
-  const { data, error } = await supabaseAdmin
-    .from('sundays')
-    .select(`
-      id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, pastor_note,
-      is_approved, is_locked, choristes, piano, batterie, guitare_elec,
-      guitare_acou, basse, son, projection, video, theme, start_time,
-      sunday_assignments(
-        user_id, pole, confirmed, instrument,
-        profiles(first_name, last_name, role)
-      )
-    `)
-    .gte('date', `${year}-01-01`)
-    .lte('date', `${year}-12-31`)
-    .order('date');
-  throwIfError(data, error);
-
+  const data = await apiFetch<any[]>(`/planning/${year}`);
   return (data || []).map((s: any) => ({
     ...s,
     id: String(s.id),
-    assignments: s.sunday_assignments || [],
+    assignments: s.assignments || s.sunday_assignments || [],
   }));
 };
 
 export const createSunday = async (date: string, label: string) => {
-  const { data, error } = await supabaseAdmin
-    .from('sundays')
-    .insert({ date, label, updated_at: new Date().toISOString() })
-    .select('id')
-    .single();
-  throwIfError(data, error);
+  const data = await apiFetch<any>('/planning/sunday', {
+    method: 'POST',
+    json: { date, label },
+  });
   return data;
 };
 
 export const updateSunday = async (id: string, data: Record<string, any>) => {
-  const { error } = await supabaseAdmin
-    .from('sundays')
-    .update({ ...data, updated_at: new Date().toISOString() })
-    .eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/planning/sunday/${id}`, { method: 'PUT', json: data });
   return { success: true };
 };
 
 export const deleteSunday = async (id: string) => {
-  const { error } = await supabaseAdmin.from('sundays').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/planning/sunday/${id}`, { method: 'DELETE' });
 };
 
 // ── Songs ─────────────────────────────────────────────────────────────────────
@@ -268,11 +180,7 @@ export interface AdminSong {
 }
 
 export const getSongs = async (): Promise<AdminSong[]> => {
-  const { data, error } = await supabaseAdmin
-    .from('songs')
-    .select('id, title, author, key_note, tempo, tags, youtube_url, lyrics, partition_url, audio_url, folder')
-    .order('title');
-  throwIfError(data, error);
+  const data = await apiFetch<any[]>('/songs');
   return (data || []).map((s: any) => ({
     ...s,
     id: String(s.id),
@@ -282,77 +190,63 @@ export const getSongs = async (): Promise<AdminSong[]> => {
 };
 
 export const getSongFolders = async (): Promise<string[]> => {
-  const { data } = await supabaseAdmin.from('songs').select('folder').not('folder', 'is', null);
+  const data = await apiFetch<any[]>('/songs');
   return [...new Set((data || []).map((s: any) => s.folder).filter(Boolean))];
 };
 
 export const createSong = async (data: { title: string; author?: string; key?: string; tempo?: string; tags?: string }) => {
-  const { error } = await supabaseAdmin.from('songs').insert({
-    title: data.title,
-    author: data.author || null,
-    key_note: data.key || null,
-    tempo: data.tempo || null,
-    tags: data.tags || null,
+  await apiFetch('/songs', {
+    method: 'POST',
+    json: {
+      title: data.title,
+      author: data.author || null,
+      key_note: data.key || null,
+      tempo: data.tempo || null,
+      tags: data.tags || null,
+    },
   });
-  if (error) throw new Error(error.message);
 };
 
 export const updateSong = async (id: string, data: Record<string, any>) => {
   const payload: any = { ...data };
   if (data.key !== undefined) { payload.key_note = data.key; delete payload.key; }
   if (data.link !== undefined) { payload.youtube_url = data.link; delete payload.link; }
-  const { error } = await supabaseAdmin.from('songs').update(payload).eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/songs/${id}`, { method: 'PUT', json: payload });
 };
 
 export const deleteSong = async (id: string) => {
-  const { error } = await supabaseAdmin.from('songs').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/songs/${id}`, { method: 'DELETE' });
 };
 
 export const uploadPartition = async (songId: string, file: File): Promise<{ partition_url: string }> => {
-  const path = `partitions/${songId}/${file.name}`;
-  const { error } = await supabaseAdmin.storage.from('songs').upload(path, file, { upsert: true });
-  if (error) throw new Error(error.message);
-  const { data: url } = supabaseAdmin.storage.from('songs').getPublicUrl(path);
-  await supabaseAdmin.from('songs').update({ partition_url: url.publicUrl }).eq('id', Number(songId));
-  return { partition_url: url.publicUrl };
+  const res = await apiUpload<{ partition_url: string }>(`/songs/${songId}/partition`, file);
+  return res;
 };
 
 export const deletePartition = async (songId: string) => {
-  const { error } = await supabaseAdmin.from('songs').update({ partition_url: null }).eq('id', Number(songId));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/songs/${songId}`, { method: 'PUT', json: { partition_url: null } });
 };
 
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 export const getPermissions = async (): Promise<{ permissions: Record<string, string[]> }> => {
-  const { data, error } = await supabaseAdmin
-    .from('permissions')
-    .select('permission_key, roles')
-    .eq('active', true);
-  throwIfError(data, error);
+  const data = await apiFetch<any[]>('/permissions');
   const permissions: Record<string, string[]> = {};
-  for (const row of data!) permissions[row.permission_key] = row.roles as string[];
+  for (const row of data || []) {
+    permissions[row.permission_key || row.key] = row.roles as string[];
+  }
   return { permissions };
 };
 
 export async function savePermissions(matrix: Record<string, string[]>) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Non connecté');
+  const token = getToken();
+  if (!token) throw new Error('Non connecté');
 
-  const rows = Object.entries(matrix).map(([permission_key, roles]) => ({
-    permission_key,
-    roles,
-    active: true,
-    updated_by: session.user.id,
-    updated_at: new Date().toISOString(),
-  }));
-
-  const { error } = await supabaseAdmin
-    .from('permissions')
-    .upsert(rows, { onConflict: 'permission_key' });
-  if (error) throw new Error(error.message);
+  await Promise.all(
+    Object.entries(matrix).map(([key, roles]) =>
+      apiFetch(`/permissions/${key}`, { method: 'PUT', json: { roles } })
+    )
+  );
   return { success: true };
 }
 
@@ -369,13 +263,12 @@ export interface SpecialEvent {
 }
 
 export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
-  const { data, error } = await supabaseAdmin.from('events').select('*').order('date');
-  throwIfError(data, error);
+  const data = await apiFetch<any[]>('/events');
   return (data || []).map((e: any) => ({
     id: String(e.id),
     title: e.title,
-    date_start: e.date,
-    date_end: e.end_date || undefined,
+    date_start: e.date || e.date_start,
+    date_end: e.end_date || e.date_end || undefined,
     type: (e.type as SpecialEvent['type']) || 'special',
     description: e.description || undefined,
     location: e.location || undefined,
@@ -383,99 +276,109 @@ export const getSpecialEvents = async (): Promise<SpecialEvent[]> => {
 };
 
 export async function createSpecialEvent(data: Omit<SpecialEvent, 'id'>) {
-  const { error } = await supabaseAdmin.from('events').insert({
-    title: data.title,
-    date: data.date_start,
-    end_date: data.date_end || null,
-    type: data.type || null,
-    description: data.description || null,
-    location: data.location || null,
+  await apiFetch('/events', {
+    method: 'POST',
+    json: {
+      title: data.title,
+      date: data.date_start,
+      end_date: data.date_end || null,
+      type: data.type || null,
+      description: data.description || null,
+      location: data.location || null,
+    },
   });
-  if (error) throw new Error(error.message);
   return { success: true };
 }
 
 export async function updateSpecialEvent(id: string, data: Partial<SpecialEvent>) {
-  const { error } = await supabaseAdmin.from('events').update({
-    title: data.title,
-    date: data.date_start,
-    end_date: data.date_end || null,
-    type: data.type || null,
-    description: data.description || null,
-    location: data.location || null,
-  }).eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/events/${id}`, {
+    method: 'PUT',
+    json: {
+      title: data.title,
+      date: data.date_start,
+      end_date: data.date_end || null,
+      type: data.type || null,
+      description: data.description || null,
+      location: data.location || null,
+    },
+  });
   return { success: true };
 }
 
 export const deleteSpecialEvent = async (id: string) => {
-  const { error } = await supabaseAdmin.from('events').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/events/${id}`, { method: 'DELETE' });
 };
 
 // ── Config / Settings ─────────────────────────────────────────────────────────
 
 export async function getSettingsByCategory(category: string): Promise<any[]> {
-  const { data, error } = await supabaseAdmin
-    .from('config')
-    .select('key, value')
-    .like('key', `${category}_%`);
-  throwIfError(data, error);
-  return (data || []).map(r => ({ key_name: r.key.replace(`${category}_`, ''), value: r.value }));
+  const data = await apiFetch<Record<string, any>>('/config');
+  const result: any[] = [];
+  for (const [key, value] of Object.entries(data || {})) {
+    if (key.startsWith(`${category}_`)) {
+      result.push({ key_name: key.replace(`${category}_`, ''), value });
+    }
+  }
+  return result;
 }
 
 export async function getAllSettings(): Promise<Record<string, any[]>> {
-  const { data } = await supabaseAdmin.from('config').select('key, value');
+  const data = await apiFetch<Record<string, any>>('/config');
   const result: Record<string, any[]> = {};
-  for (const row of data || []) {
-    const [cat, ...rest] = row.key.split('_');
+  for (const [key, value] of Object.entries(data || {})) {
+    const [cat, ...rest] = key.split('_');
     if (!result[cat]) result[cat] = [];
-    result[cat].push({ key_name: rest.join('_'), value: row.value });
+    result[cat].push({ key_name: rest.join('_'), value });
   }
   return result;
 }
 
 export async function saveSetting(category: string, key: string, value: any) {
   const fullKey = `${category}_${key}`;
-  const { error } = await supabaseAdmin.from('config').upsert(
-    { key: fullKey, value: typeof value === 'string' ? value : JSON.stringify(value), updated_at: new Date().toISOString() },
-    { onConflict: 'key' }
-  );
-  if (error) throw new Error(error.message);
+  await apiFetch(`/config/${fullKey}`, {
+    method: 'PUT',
+    json: { value: typeof value === 'string' ? value : JSON.stringify(value) },
+  });
   return { success: true };
 }
 
 export async function saveSettingsBulk(settings: { category: string; key: string; value: any }[]) {
-  const rows = settings.map(s => ({
-    key: `${s.category}_${s.key}`,
-    value: typeof s.value === 'string' ? s.value : JSON.stringify(s.value),
-    updated_at: new Date().toISOString(),
-  }));
-  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
+  await Promise.all(
+    settings.map(s =>
+      apiFetch(`/config/${s.category}_${s.key}`, {
+        method: 'PUT',
+        json: { value: typeof s.value === 'string' ? s.value : JSON.stringify(s.value) },
+      })
+    )
+  );
   return { success: true };
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  const { data, error } = await supabaseAdmin.from('config').select('key, value');
-  throwIfError(data, error);
-  return Object.fromEntries((data || []).map(r => [r.key, r.value]));
+  const data = await apiFetch<Record<string, any>>('/config');
+  return data as Record<string, string>;
 }
 
 export async function saveSettings(settings: { key: string; value: string }[]) {
-  const rows = settings.map(s => ({ key: s.key, value: s.value, updated_at: new Date().toISOString() }));
-  const { error } = await supabaseAdmin.from('config').upsert(rows, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
+  await Promise.all(
+    settings.map(s =>
+      apiFetch(`/config/${s.key}`, { method: 'PUT', json: { value: s.value } })
+    )
+  );
   return { success: true };
 }
 
 export async function getSystemStats() {
-  const [members, songs, sundays] = await Promise.all([
-    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('sundays').select('id', { count: 'exact', head: true }),
+  const [members, songs, planning] = await Promise.allSettled([
+    apiFetch<any[]>('/members'),
+    apiFetch<any[]>('/songs'),
+    apiFetch<any[]>(`/planning/${new Date().getFullYear()}`),
   ]);
-  return { members: members.count, songs: songs.count, sundays: sundays.count };
+  return {
+    members: members.status === 'fulfilled' ? (members.value || []).length : 0,
+    songs:   songs.status === 'fulfilled'   ? (songs.value   || []).length : 0,
+    sundays: planning.status === 'fulfilled' ? (planning.value || []).length : 0,
+  };
 }
 
 export async function clearCache() { return { success: true }; }
@@ -484,17 +387,21 @@ export function getBackupUrl(): string { return ''; }
 // ── Programme du culte ────────────────────────────────────────────────────────
 
 export async function saveProgram(date: string, data: object) {
-  const { error } = await supabaseAdmin.from('config').upsert(
-    { key: `programme_${date}`, value: JSON.stringify(data), updated_at: new Date().toISOString() },
-    { onConflict: 'key' }
-  );
-  if (error) throw new Error(error.message);
+  await apiFetch(`/config/programme_${date}`, {
+    method: 'PUT',
+    json: { value: JSON.stringify(data) },
+  });
   return { success: true };
 }
 
 export async function loadPrograms(): Promise<Array<{ key_name: string; value: string }>> {
-  const { data } = await supabaseAdmin.from('config').select('key, value').like('key', 'programme_%');
-  return (data || []).map(r => ({ key_name: r.key.replace('programme_', ''), value: r.value }));
+  const data = await apiFetch<Record<string, any>>('/config');
+  return Object.entries(data || {})
+    .filter(([key]) => key.startsWith('programme_'))
+    .map(([key, value]) => ({
+      key_name: key.replace('programme_', ''),
+      value: typeof value === 'string' ? value : JSON.stringify(value),
+    }));
 }
 
 // ── Runsheet ──────────────────────────────────────────────────────────────────
@@ -517,45 +424,44 @@ export interface RunsheetData {
 }
 
 export async function getRunsheet(sundayId: string): Promise<RunsheetData> {
-  const { data, error } = await supabaseAdmin
-    .from('sunday_runsheet')
-    .select('*')
-    .eq('sunday_id', Number(sundayId))
-    .order('position');
-  throwIfError(data, error);
-  const { data: sunday } = await supabaseAdmin.from('sundays').select('start_time').eq('id', Number(sundayId)).single();
-  return {
-    items: (data || []).map((r: any) => ({ ...r, id: String(r.id), song_id: r.song_id ? String(r.song_id) : null })),
-    start_time: sunday?.start_time || '10:00',
-  };
+  try {
+    const data = await apiFetch<{ items: any[]; start_time: string }>(`/planning/sunday/${sundayId}/runsheet`);
+    return {
+      items: (data.items || []).map((r: any) => ({ ...r, id: String(r.id), song_id: r.song_id ? String(r.song_id) : null })),
+      start_time: data.start_time || '10:00',
+    };
+  } catch {
+    return { items: [], start_time: '10:00' };
+  }
 }
 
 export async function saveRunsheet(sundayId: string, items: RunsheetItem[]): Promise<void> {
-  await supabaseAdmin.from('sunday_runsheet').delete().eq('sunday_id', Number(sundayId));
-  if (items.length === 0) return;
-  const { error } = await supabaseAdmin.from('sunday_runsheet').insert(
-    items.map((item, i) => ({
-      sunday_id: Number(sundayId),
+  await apiFetch(`/planning/sunday/${sundayId}/runsheet`, {
+    method: 'PUT',
+    json: { items: items.map((item, i) => ({
       position: item.position ?? i,
       type: item.type,
       title: item.title,
       duration_min: item.duration_min,
       notes: item.notes || null,
-      song_id: item.song_id ? Number(item.song_id) : null,
+      song_id: item.song_id || null,
       is_published: item.is_published ?? false,
-    }))
-  );
-  if (error) throw new Error(error.message);
+    })) },
+  });
 }
 
 export async function publishRunsheet(sundayId: string, published: boolean): Promise<void> {
-  const { error } = await supabaseAdmin.from('sunday_runsheet').update({ is_published: published }).eq('sunday_id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/planning/sunday/${sundayId}/runsheet/publish`, {
+    method: 'PUT',
+    json: { is_published: published },
+  });
 }
 
 export async function updateRunsheetStartTime(sundayId: string, startTime: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('sundays').update({ start_time: startTime }).eq('id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/planning/sunday/${sundayId}`, {
+    method: 'PUT',
+    json: { start_time: startTime },
+  });
 }
 
 // ── Activity logs (journal d'activité) ────────────────────────────────────────
@@ -576,52 +482,21 @@ export async function getActivityLogs(params?: {
   type?: string;
 }): Promise<{ data: ActivityLog[]; items: ActivityLog[]; total: number }> {
   const limit = params?.limit ?? 20;
+  const logs: ActivityLog[] = [];
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 60);
-  const cutoffStr = cutoff.toISOString();
-  const logs: ActivityLog[] = [];
 
-  const [absencesRes, disposRes, profilesRes, sundaysRes, songsRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('absences')
-      .select('id, user_id, date_start, created_at, profiles(first_name, last_name)')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(40),
-
-    supabaseAdmin
-      .from('disponibilites')
-      .select('id, user_id, sunday_id, available, responded_at, profiles(first_name, last_name)')
-      .gte('responded_at', cutoffStr)
-      .order('responded_at', { ascending: false })
-      .limit(40),
-
-    supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, role, created_at')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(20),
-
-    supabaseAdmin
-      .from('sundays')
-      .select('id, date, label, updated_at')
-      .gte('updated_at', cutoffStr)
-      .order('updated_at', { ascending: false })
-      .limit(20),
-
-    supabaseAdmin
-      .from('songs')
-      .select('id, title, author, created_at')
-      .gte('created_at', cutoffStr)
-      .order('created_at', { ascending: false })
-      .limit(15),
+  const [absencesRes, disposRes, membersRes, planningRes, songsRes] = await Promise.allSettled([
+    apiFetch<any[]>('/absences'),
+    apiFetch<any[]>('/disponibilites'),
+    apiFetch<any[]>('/members'),
+    apiFetch<any[]>(`/planning/${new Date().getFullYear()}`),
+    apiFetch<any[]>('/songs'),
   ]);
 
-  if (absencesRes.status === 'fulfilled' && absencesRes.value.data) {
-    for (const a of absencesRes.value.data) {
-      const profile = a.profiles as any;
-      const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
+  if (absencesRes.status === 'fulfilled') {
+    for (const a of (absencesRes.value || []).slice(0, 40)) {
+      const name = [a.first_name, a.last_name].filter(Boolean).join(' ') || 'Membre';
       const dateStr = a.date_start
         ? new Date(a.date_start + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
         : undefined;
@@ -632,15 +507,14 @@ export async function getActivityLogs(params?: {
         description: `${name} a déclaré une absence`,
         user_name: name,
         detail: dateStr,
-        created_at: a.created_at,
+        created_at: a.created_at || new Date().toISOString(),
       });
     }
   }
 
-  if (disposRes.status === 'fulfilled' && disposRes.value.data) {
-    for (const d of disposRes.value.data) {
-      const profile = d.profiles as any;
-      const name = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Membre';
+  if (disposRes.status === 'fulfilled') {
+    for (const d of (disposRes.value || []).slice(0, 40)) {
+      const name = [d.first_name, d.last_name].filter(Boolean).join(' ') || 'Membre';
       const statusLabel = d.available ? 'disponible' : 'indisponible';
       logs.push({
         id: `dispo_${d.id}`,
@@ -649,14 +523,14 @@ export async function getActivityLogs(params?: {
         description: `${name} s'est marqué ${statusLabel}`,
         user_name: name,
         detail: undefined,
-        created_at: d.responded_at,
+        created_at: d.responded_at || new Date().toISOString(),
       });
     }
   }
 
-  if (profilesRes.status === 'fulfilled' && profilesRes.value.data) {
-    for (const p of profilesRes.value.data) {
-      const name = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+  if (membersRes.status === 'fulfilled') {
+    for (const p of (membersRes.value || []).slice(0, 20)) {
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
       if (!name) continue;
       logs.push({
         id: `profile_${p.id}`,
@@ -665,13 +539,13 @@ export async function getActivityLogs(params?: {
         description: `Nouveau membre : ${name}`,
         user_name: name,
         detail: p.role ? p.role.split(',')[0].replace(/_/g, ' ') : 'Membre',
-        created_at: p.created_at,
+        created_at: p.created_at || new Date().toISOString(),
       });
     }
   }
 
-  if (sundaysRes.status === 'fulfilled' && sundaysRes.value.data) {
-    for (const s of sundaysRes.value.data) {
+  if (planningRes.status === 'fulfilled') {
+    for (const s of (planningRes.value || []).slice(0, 20)) {
       const dateStr = s.date
         ? new Date(s.date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
         : undefined;
@@ -682,13 +556,13 @@ export async function getActivityLogs(params?: {
         description: `Planning modifié : ${s.label || 'Culte'}`,
         user_name: 'Administrateur',
         detail: dateStr,
-        created_at: s.updated_at,
+        created_at: s.updated_at || new Date().toISOString(),
       });
     }
   }
 
-  if (songsRes.status === 'fulfilled' && songsRes.value.data) {
-    for (const s of songsRes.value.data) {
+  if (songsRes.status === 'fulfilled') {
+    for (const s of (songsRes.value || []).slice(0, 15)) {
       logs.push({
         id: `song_${s.id}`,
         type: 'song',
@@ -696,7 +570,7 @@ export async function getActivityLogs(params?: {
         description: `Nouveau chant : ${s.title}`,
         user_name: s.author || 'Inconnu',
         detail: s.author || undefined,
-        created_at: s.created_at,
+        created_at: s.created_at || new Date().toISOString(),
       });
     }
   }
@@ -711,20 +585,23 @@ export async function getActivityLogs(params?: {
 export async function getActivitySummary(days = 7): Promise<Record<string, number>> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = cutoff.toISOString();
 
   const [absences, dispos, members, songs] = await Promise.allSettled([
-    supabaseAdmin.from('absences').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabaseAdmin.from('disponibilites').select('id', { count: 'exact', head: true }).gte('responded_at', cutoffStr),
-    supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
-    supabaseAdmin.from('songs').select('id', { count: 'exact', head: true }).gte('created_at', cutoffStr),
+    apiFetch<any[]>('/absences'),
+    apiFetch<any[]>('/disponibilites'),
+    apiFetch<any[]>('/members'),
+    apiFetch<any[]>('/songs'),
   ]);
 
+  const cutoffStr = cutoff.toISOString();
+  const countSince = (items: any[], dateField: string) =>
+    (items || []).filter((x: any) => x[dateField] && x[dateField] >= cutoffStr).length;
+
   return {
-    absences: absences.status === 'fulfilled' ? absences.value.count ?? 0 : 0,
-    dispos:   dispos.status === 'fulfilled'   ? dispos.value.count   ?? 0 : 0,
-    members:  members.status === 'fulfilled'  ? members.value.count  ?? 0 : 0,
-    songs:    songs.status === 'fulfilled'    ? songs.value.count    ?? 0 : 0,
+    absences: absences.status === 'fulfilled' ? countSince(absences.value, 'created_at') : 0,
+    dispos:   dispos.status === 'fulfilled'   ? countSince(dispos.value, 'responded_at') : 0,
+    members:  members.status === 'fulfilled'  ? countSince(members.value, 'created_at') : 0,
+    songs:    songs.status === 'fulfilled'    ? countSince(songs.value, 'created_at') : 0,
   };
 }
 
@@ -764,50 +641,40 @@ export interface SundayDispo {
 
 export async function getDisponibilitesAdmin(year?: number): Promise<SundayDispo[]> {
   const y = year ?? new Date().getFullYear();
-  const { data: sundays, error } = await supabaseAdmin
-    .from('sundays')
-    .select('id, date, label, is_jeunesse, dispo_deadline')
-    .gte('date', `${y}-01-01`)
-    .lte('date', `${y}-12-31`)
-    .order('date');
-  if (error) throw new Error(error.message);
+  const [sundaysData, disposData, membersData] = await Promise.all([
+    apiFetch<any[]>(`/planning/${y}`),
+    apiFetch<any[]>('/disponibilites'),
+    apiFetch<any[]>('/members'),
+  ]);
 
-  const { data: dispos } = await supabaseAdmin
-    .from('disponibilites')
-    .select('sunday_id, user_id, available, note, responded_at, profiles(first_name, last_name, role)')
-    .in('sunday_id', (sundays || []).map((s: any) => s.id));
+  const sundays = (sundaysData || []).filter((s: any) => s.date >= `${y}-01-01` && s.date <= `${y}-12-31`);
+  const dispos = disposData || [];
+  const totalMembers = (membersData || []).filter((m: any) => m.is_active && m.first_name !== '[Supprimé]').length;
 
-  const { data: members } = await supabaseAdmin
-    .from('profiles')
-    .select('id', { count: 'exact', head: false })
-    .eq('is_active', true)
-    .not('first_name', 'eq', '[Supprimé]');
-  const totalMembers = members?.length ?? 0;
-
-  const dispoMap = new Map<number, DispoEntry[]>();
-  for (const d of dispos || []) {
-    const p = d.profiles as any;
+  const dispoMap = new Map<string, DispoEntry[]>();
+  for (const d of dispos) {
     const entry: DispoEntry = {
       user_id: d.user_id,
-      first_name: p?.first_name || '',
-      last_name: p?.last_name || '',
-      role: p?.role || '',
+      first_name: d.first_name || '',
+      last_name: d.last_name || '',
+      role: d.role || '',
       available: d.available,
       note: d.note,
       responded_at: d.responded_at,
     };
-    if (!dispoMap.has(d.sunday_id)) dispoMap.set(d.sunday_id, []);
-    dispoMap.get(d.sunday_id)!.push(entry);
+    const key = String(d.sunday_id);
+    if (!dispoMap.has(key)) dispoMap.set(key, []);
+    dispoMap.get(key)!.push(entry);
   }
 
-  return (sundays || []).map((s: any) => {
-    const responses = dispoMap.get(s.id) || [];
+  return sundays.map((s: any) => {
+    const responses = dispoMap.get(String(s.id)) || [];
     return {
       sunday_id: String(s.id),
       date: s.date,
       label: s.label,
       is_jeunesse: s.is_jeunesse,
-      dispo_deadline: s.dispo_deadline,
+      dispo_deadline: s.dispo_deadline || null,
       responses,
       total_members: totalMembers,
       responded_count: responses.length,
@@ -817,11 +684,10 @@ export async function getDisponibilitesAdmin(year?: number): Promise<SundayDispo
 }
 
 export async function setDispoDeadline(sundayId: string, deadline: string | null): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('sundays')
-    .update({ dispo_deadline: deadline })
-    .eq('id', Number(sundayId));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/planning/sunday/${sundayId}`, {
+    method: 'PUT',
+    json: { dispo_deadline: deadline },
+  });
 }
 
 // ── Absences (vue admin) ──────────────────────────────────────────────────────
@@ -840,29 +706,25 @@ export interface AdminAbsence {
 
 export async function getAbsencesAdmin(year?: number): Promise<AdminAbsence[]> {
   const y = year ?? new Date().getFullYear();
-  const { data, error } = await supabaseAdmin
-    .from('absences')
-    .select('id, user_id, date_start, date_end, reason, created_at, profiles(first_name, last_name, role)')
-    .gte('date_start', `${y}-01-01`)
-    .lte('date_start', `${y}-12-31`)
-    .order('date_start', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data || []).map((a: any) => ({
-    id: String(a.id),
-    user_id: a.user_id,
-    first_name: a.profiles?.first_name || '',
-    last_name: a.profiles?.last_name || '',
-    role: a.profiles?.role || '',
-    date_start: a.date_start,
-    date_end: a.date_end || null,
-    reason: a.reason || null,
-    created_at: a.created_at,
-  }));
+  const data = await apiFetch<any[]>('/absences');
+  return (data || [])
+    .filter((a: any) => a.date_start >= `${y}-01-01` && a.date_start <= `${y}-12-31`)
+    .sort((a: any, b: any) => b.date_start.localeCompare(a.date_start))
+    .map((a: any) => ({
+      id: String(a.id),
+      user_id: a.user_id,
+      first_name: a.first_name || '',
+      last_name: a.last_name || '',
+      role: a.role || '',
+      date_start: a.date_start,
+      date_end: a.date_end || null,
+      reason: a.reason || null,
+      created_at: a.created_at,
+    }));
 }
 
 export async function deleteAbsenceAdmin(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('absences').delete().eq('id', Number(id));
-  if (error) throw new Error(error.message);
+  await apiFetch(`/absences/${id}`, { method: 'DELETE' });
 }
 
 // ── Archives vidéo (video_meta) ───────────────────────────────────────────────
@@ -883,24 +745,12 @@ export interface VideoMetaSummary {
 }
 
 export async function getVideoMetaList(): Promise<VideoMetaSummary[]> {
-  const { data, error } = await supabaseAdmin
-    .from('video_meta')
-    .select('video_id, preacher, theme, tags, checklist, updated_at')
-    .order('updated_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data || []).map((r: any) => ({
-    video_id: r.video_id,
-    preacher: r.preacher ?? null,
-    theme: r.theme ?? null,
-    tags: Array.isArray(r.tags) ? r.tags : [],
-    checklist: r.checklist ?? { montage: false, subtitles: false, thumbnail: false, description_yt: false, published: false },
-    updated_at: r.updated_at ?? null,
-  }));
+  // video_meta n'a pas d'endpoint dédié dans AEFApi — retourne vide
+  return [];
 }
 
-export async function deleteVideoMeta(videoId: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('video_meta').delete().eq('video_id', videoId);
-  if (error) throw new Error(error.message);
+export async function deleteVideoMeta(_videoId: string): Promise<void> {
+  // video_meta n'a pas d'endpoint dédié dans AEFApi
 }
 
 // ── Prédications / Sermons ────────────────────────────────────────────────────
@@ -917,30 +767,31 @@ export interface Sermon {
 }
 
 export async function getSermons(): Promise<Sermon[]> {
-  const { data, error } = await supabaseAdmin
-    .from('config')
-    .select('key, value')
-    .like('key', 'sermon_%')
-    .order('key', { ascending: false });
-  if (error) return [];
-  return (data || []).map((r: any) => {
-    try { return { id: r.key, ...JSON.parse(r.value) }; }
-    catch { return null; }
-  }).filter(Boolean) as Sermon[];
+  try {
+    const data = await apiFetch<Record<string, any>>('/config');
+    return Object.entries(data || {})
+      .filter(([key]) => key.startsWith('sermon_'))
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, value]) => {
+        try { return { id: key, ...(typeof value === 'string' ? JSON.parse(value) : value) }; }
+        catch { return null; }
+      }).filter(Boolean) as Sermon[];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveSermon(sermon: Sermon): Promise<void> {
   const key = sermon.id || `sermon_${sermon.date}_${Date.now()}`;
   const { id: _id, ...rest } = sermon;
-  const { error } = await supabaseAdmin
-    .from('config')
-    .upsert({ key, value: JSON.stringify(rest), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-  if (error) throw new Error(error.message);
+  await apiFetch(`/config/${key}`, {
+    method: 'PUT',
+    json: { value: JSON.stringify(rest) },
+  });
 }
 
 export async function deleteSermon(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('config').delete().eq('key', id);
-  if (error) throw new Error(error.message);
+  await apiFetch(`/config/${id}`, { method: 'DELETE' });
 }
 
 // ── Member type (utilisé par planning gestion) ────────────────────────────────
@@ -994,31 +845,18 @@ export interface AbsenceWithMember {
 }
 
 export const getFullPlanning = async (year?: number): Promise<Sunday[]> => {
-  let query = supabaseAdmin
-    .from('sundays')
-    .select(`
-      id, date, label, is_jeunesse, dirigeant_id, dirigeant, note, is_locked,
-      dir_profile:profiles!sundays_dirigeant_id_fkey(first_name, last_name),
-      sunday_assignments(
-        user_id, pole, confirmed, instrument,
-        profiles(first_name, last_name)
-      )
-    `);
-  if (year) {
-    query = query.gte('date', `${year}-01-01`).lte('date', `${year}-12-31`);
-  }
-  const { data, error } = await query.order('date');
-  throwIfError(data, error);
+  const y = year ?? new Date().getFullYear();
+  const data = await apiFetch<any[]>(`/planning/${y}`);
 
   return (data || []).map((s: any) => {
     const assignments: Record<string, SundayPerson[]> = {};
-    for (const a of s.sunday_assignments || []) {
+    for (const a of s.assignments || s.sunday_assignments || []) {
       if (!assignments[a.pole]) assignments[a.pole] = [];
       assignments[a.pole].push({
         user_id: a.user_id,
         pole: a.pole,
-        first_name: a.profiles?.first_name || '',
-        last_name: a.profiles?.last_name || '',
+        first_name: a.first_name || a.profiles?.first_name || '',
+        last_name: a.last_name || a.profiles?.last_name || '',
         confirmed: a.confirmed === null ? null : a.confirmed ? '1' : '0',
       });
     }
@@ -1029,8 +867,8 @@ export const getFullPlanning = async (year?: number): Promise<Sunday[]> => {
       is_jeunesse: s.is_jeunesse,
       dirigeant_id: s.dirigeant_id,
       dir_id: s.dirigeant_id,
-      dir_first: s.dir_profile?.first_name || '',
-      dir_last: s.dir_profile?.last_name || '',
+      dir_first: s.dir_first || '',
+      dir_last: s.dir_last || '',
       dirigeant: s.dirigeant,
       note: s.note,
       is_locked: s.is_locked,
@@ -1055,46 +893,21 @@ export async function assignSunday(
   if (_savingIds.has(sundayId)) return;
   _savingIds.add(sundayId);
   try {
-    const numId = Number(sundayId);
-
-    const { error: sErr } = await supabaseAdmin.from('sundays').update({
-      dirigeant_id: data.dirigeant_id || null,
-      note: data.note || null,
-    }).eq('id', numId);
-    if (sErr) throw new Error(sErr.message);
-
-    const seen = new Set<string>();
-    const rows: { sunday_id: number; user_id: string; pole: string }[] = [];
-    for (const [pole, userIds] of Object.entries(data.poles)) {
-      for (const uid of userIds) {
-        const s = String(uid);
-        if (s && !seen.has(s)) { seen.add(s); rows.push({ sunday_id: numId, user_id: s, pole }); }
-      }
-    }
-
-    const { error: delErr } = await supabaseAdmin
-      .from('sunday_assignments')
-      .delete()
-      .eq('sunday_id', numId);
-    if (delErr) throw new Error(delErr.message);
-
-    if (rows.length > 0) {
-      const { error: insErr } = await supabaseAdmin
-        .from('sunday_assignments')
-        .insert(rows);
-      if (insErr) throw new Error(insErr.message);
-    }
+    await apiFetch(`/planning/sunday/${sundayId}/assign`, {
+      method: 'PUT',
+      json: {
+        dirigeant_id: data.dirigeant_id || null,
+        note: data.note || null,
+        poles: data.poles,
+      },
+    });
   } finally {
     _savingIds.delete(sundayId);
   }
 }
 
 export const getAllAbsences = async (): Promise<AbsenceWithMember[]> => {
-  const { data, error } = await supabaseAdmin
-    .from('absences')
-    .select('id, date_start, date_end, reason, created_at, user_id, profiles(first_name, last_name)')
-    .order('date_start', { ascending: false });
-  throwIfError(data, error);
+  const data = await apiFetch<any[]>('/absences');
   return (data || []).map((a: any) => ({
     id: String(a.id),
     date_start: a.date_start,
@@ -1102,8 +915,8 @@ export const getAllAbsences = async (): Promise<AbsenceWithMember[]> => {
     reason: a.reason,
     created_at: a.created_at,
     user_id: a.user_id,
-    first_name: a.profiles?.first_name || '',
-    last_name: a.profiles?.last_name || '',
+    first_name: a.first_name || '',
+    last_name: a.last_name || '',
   }));
 };
 

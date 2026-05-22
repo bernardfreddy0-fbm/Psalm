@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { apiFetch, clearTokens } from '@/lib/apiClient';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -15,23 +15,12 @@ export default function ResetPasswordPage() {
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    // Supabase places the token in the URL fragment as:
-    // #access_token=...&type=recovery
-    // When the page loads, the Supabase client automatically detects and
-    // processes this fragment, establishing a temporary session.
-    // We just need to verify that the fragment is present and has type=recovery.
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.replace('#', ''));
-    const type = params.get('type');
-    const accessToken = params.get('access_token');
+  // Token reset passé en query param ?token=... (format AEFApi)
+  const resetToken = new URLSearchParams(window.location.search).get('token') ?? '';
 
-    if (type === 'recovery' && accessToken) {
-      setTokenValid(true);
-    } else {
-      setTokenValid(false);
-    }
-  }, []);
+  useEffect(() => {
+    setTokenValid(!!resetToken);
+  }, [resetToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,15 +38,13 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        toast.error('Erreur', { description: updateError.message });
-      } else {
-        toast.success('Mot de passe mis à jour');
-        // Sign out to clear the recovery session, then redirect to login
-        await supabase.auth.signOut();
-        navigate('/');
-      }
+      await apiFetch('/auth/set-password', {
+        method: 'POST',
+        json: { token: resetToken, password },
+      });
+      toast.success('Mot de passe mis à jour');
+      clearTokens();
+      navigate('/');
     } catch (err: any) {
       toast.error('Erreur', { description: err?.message ?? 'Une erreur inattendue est survenue.' });
     } finally {

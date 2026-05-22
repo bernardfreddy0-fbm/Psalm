@@ -59,11 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await logout();
         return;
       }
-      // Vérification Supabase Auth (token révoqué côté serveur)
+      // Vérification token AEFApi (token révoqué côté serveur)
       try {
         const u = await checkAuth();
         if (!u) {
-          console.info('[Security] Session Supabase invalide — déconnexion automatique');
+          console.info('[Security] Session AEFApi invalide — déconnexion automatique');
           await logout();
         }
       } catch {
