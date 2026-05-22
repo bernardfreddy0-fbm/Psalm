@@ -233,7 +233,12 @@ export const getPermissions = async (): Promise<{ permissions: Record<string, st
   const data = await apiFetch<any[]>('/permissions');
   const permissions: Record<string, string[]> = {};
   for (const row of data || []) {
-    permissions[row.permission_key || row.key] = row.roles as string[];
+    const key = row.permission_key || row.key;
+    // L'API renvoie roles comme string CSV — on parse en tableau
+    const rolesRaw = row.roles;
+    permissions[key] = typeof rolesRaw === 'string'
+      ? rolesRaw.split(',').map((r: string) => r.trim()).filter(Boolean)
+      : (Array.isArray(rolesRaw) ? rolesRaw : []);
   }
   return { permissions };
 };
@@ -244,7 +249,8 @@ export async function savePermissions(matrix: Record<string, string[]>) {
 
   await Promise.all(
     Object.entries(matrix).map(([key, roles]) =>
-      apiFetch(`/permissions/${key}`, { method: 'PUT', json: { roles } })
+      // L'API attend roles comme string CSV
+      apiFetch(`/permissions/${key}`, { method: 'PUT', json: { roles: roles.join(',') } })
     )
   );
   return { success: true };
