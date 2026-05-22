@@ -13,7 +13,6 @@ import EvenementsPage from "@/pages/EvenementsPage";
 import RotationsPage from "@/pages/RotationsPage";
 import MembresPage from "@/pages/MembresPage";
 import ChantsPage from "@/pages/ChantsPage";
-import ComptesPage from "@/pages/ComptesPage";
 import PermissionsPage from "@/pages/PermissionsPage";
 import AccesPage from "@/pages/AccesPage";
 import JournalPage from "@/pages/JournalPage";
@@ -63,7 +62,7 @@ function AppRoutes() {
             <Route path="/rotations" element={<Guard action="planning_edit"><RotationsPage /></Guard>} />
             <Route path="/chants" element={<Guard action="songs_view"><ChantsPage /></Guard>} />
             <Route path="/acces" element={<Guard action="members_manage"><AccesPage /></Guard>} />
-            <Route path="/comptes" element={<Guard action="members_manage"><ComptesPage /></Guard>} />
+            <Route path="/comptes" element={<Navigate to="/acces" replace />} />
             <Route path="/permissions" element={<Guard action="config_edit"><PermissionsPage /></Guard>} />
             <Route path="/journal" element={<Guard action="config_edit"><JournalPage /></Guard>} />
             <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />

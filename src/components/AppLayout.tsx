@@ -47,7 +47,7 @@ const navSections = [
   {
     label: 'ADMIN',
     items: [
-      { to: '/acces', icon: ShieldCheck, label: 'Accès & Identités' },
+      { to: '/acces', icon: ShieldCheck, label: 'Membres & Accès' },
       { to: '/journal', icon: ScrollText, label: 'Journal' },
       { to: '/configuration', icon: Settings, label: 'Configuration' },
     ],
@@ -63,8 +63,8 @@ const pageTitles: Record<string, string> = {
   '/evenements': 'Événements',
   '/programme': 'Programme du culte',
   '/rotations': 'Rotations & Participation',
-  '/acces': 'Accès & Identités',
-  '/comptes': 'Gestion des comptes',
+  '/acces': 'Membres & Accès',
+
   '/permissions': 'Permissions',
   '/journal': 'Journal d\'activité',
   '/configuration': 'Configuration',
