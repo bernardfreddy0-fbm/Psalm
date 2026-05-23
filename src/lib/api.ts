@@ -771,14 +771,15 @@ export const STATUS_LABELS: Record<VideoStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<VideoStatus, { bg: string; text: string }> = {
-  brut:       { bg: 'bg-zinc-500/15',    text: 'text-zinc-400' },
-  montage:    { bg: 'bg-blue-500/15',    text: 'text-blue-400' },
-  validation: { bg: 'bg-amber-500/15',   text: 'text-amber-400' },
+  brut:       { bg: 'bg-blue-500/15',    text: 'text-blue-400' },
+  montage:    { bg: 'bg-amber-500/15',   text: 'text-amber-400' },
+  validation: { bg: 'bg-purple-500/15',  text: 'text-purple-400' },
   publie:     { bg: 'bg-emerald-500/15', text: 'text-emerald-400' },
 };
 
 export interface VideoMetaSummary {
   video_id:    string;
+  sunday_id:   number | null;
   preacher:    string | null;
   theme:       string | null;
   status:      VideoStatus;
@@ -844,6 +845,72 @@ export async function saveVideoAssignment(sundayId: number, videasteId: string, 
 
 export async function removeVideoAssignment(sundayId: number): Promise<void> {
   await apiFetch(`/archives/assignments/${sundayId}`, { method: 'DELETE' });
+}
+
+// ── Programme du culte ────────────────────────────────────────────────────────
+
+export type SequenceType = 'louange' | 'prédication' | 'prière' | 'annonces' | 'témoignage' | 'autre';
+
+export interface ProgrammeSequence {
+  ordre:  number;
+  type:   SequenceType;
+  titre:  string;
+  notes:  string;
+}
+
+export interface ProgrammeCulte {
+  id:                number;
+  sunday_id:         number;
+  submitted_by_name: string;
+  submitted_at:      string;
+  sequences:         ProgrammeSequence[];
+  notes:             string | null;
+}
+
+export interface NextSundayAssignment {
+  videaste_id: string;
+  first_name:  string;
+  last_name:   string;
+  phone:       string | null;
+  role:        string | null;
+  note:        string | null;
+}
+
+export interface NextSunday {
+  sunday_id:     number;
+  sunday_date:   string;
+  sunday_label:  string | null;
+  assignment:    NextSundayAssignment | null;
+  has_programme: boolean;
+}
+
+export const SEQUENCE_TYPE_LABELS: Record<SequenceType, string> = {
+  louange:     'Louange',
+  prédication: 'Prédication',
+  prière:      'Prière',
+  annonces:    'Annonces',
+  témoignage:  'Témoignage',
+  autre:       'Autre',
+};
+
+export async function getNextSundays(): Promise<NextSunday[]> {
+  return apiFetch<NextSunday[]>('/archives/next-sundays');
+}
+
+export async function getProgrammeCulte(sundayId: number): Promise<ProgrammeCulte | null> {
+  try {
+    return await apiFetch<ProgrammeCulte | null>(`/archives/programme-culte/${sundayId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function submitProgrammeCulte(data: {
+  sunday_id:  number;
+  sequences:  ProgrammeSequence[];
+  notes?:     string | null;
+}): Promise<void> {
+  await apiFetch('/archives/programme-culte', { method: 'POST', json: data });
 }
 
 // ── Prédications / Sermons ────────────────────────────────────────────────────
