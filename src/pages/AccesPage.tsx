@@ -40,6 +40,8 @@ const ROLES = [
   // Niveau 2 — Responsables de pôle
   'responsable_louange', 'responsable_sonorisation', 'responsable_projection',
   'responsable_musicien', 'responsable_video', 'responsable_accueil',
+  // Niveau 2 bis — Référents AEFV
+  'referent_planning_video', 'referent_technique_video',
   // Niveau 3 — Membres opérationnels
   'conducteur_louange', 'choriste',
   'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste',
@@ -56,6 +58,9 @@ const ROLE_LABELS: Record<string, string> = {
   responsable_musicien:      'Resp. Musicien',
   responsable_video:         'Resp. Vidéo',
   responsable_accueil:       'Resp. Accueil',
+  // N2 bis — Référents AEFV
+  referent_planning_video:  'Réf. Planning AEFV',
+  referent_technique_video: 'Réf. Technique AEFV',
   // N3
   conducteur_louange: 'Cond. Louange',
   choriste: 'Choriste', pianiste: 'Pianiste', batteur: 'Batteur',
@@ -76,6 +81,9 @@ const ROLE_COLORS: Record<string, string> = {
   responsable_musicien:      'bg-emerald-600/10 text-emerald-600 border-emerald-600/20',
   responsable_video:         'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
   responsable_accueil:       'bg-rose-500/10 text-rose-600 border-rose-500/20',
+  // N2 bis — Référents AEFV
+  referent_planning_video:  'bg-red-500/10 text-red-600 border-red-500/20',
+  referent_technique_video: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
   // N3
   conducteur_louange:   'bg-blue-500/10 text-blue-500 border-blue-500/20',
   choriste:             'bg-amber-500/10 text-amber-600 border-amber-500/20',
@@ -101,6 +109,9 @@ const PERM_ROLES = [
   { role: 'responsable_musicien',     label: 'Resp. Musicien',   color: 'bg-emerald-600' },
   { role: 'responsable_video',        label: 'Resp. Vidéo',      color: 'bg-indigo-500' },
   { role: 'responsable_accueil',      label: 'Resp. Accueil',    color: 'bg-rose-500' },
+  // Niveau 2 bis — Référents AEFV
+  { role: 'referent_planning_video',  label: 'Réf. Planning AEFV',  color: 'bg-red-500' },
+  { role: 'referent_technique_video', label: 'Réf. Technique AEFV', color: 'bg-orange-600' },
   // Niveau 3
   { role: 'conducteur_louange',    label: 'Cond. Louange', color: 'bg-blue-500' },
   { role: 'choriste',              label: 'Choriste',      color: 'bg-amber-500' },
