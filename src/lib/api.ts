@@ -959,3 +959,30 @@ export function getAbsentMemberIds(absences: AbsenceWithMember[], date: string):
       .map(a => String(a.user_id))
   );
 }
+
+// ── Admin / Migrations (dev only) ─────────────────────────────────────────────
+
+export interface MigrationEntry {
+  hash: string;
+  applied_at: string | null;
+}
+
+export interface MigrationsStatus {
+  migrations: MigrationEntry[];
+}
+
+export interface MigrationsRunResult {
+  ok: boolean;
+  applied: number;
+  new_migrations: string[];
+  total: number;
+  message: string;
+}
+
+export async function getMigrationsStatus(): Promise<MigrationsStatus> {
+  return apiFetch<MigrationsStatus>('/admin/migrations/status');
+}
+
+export async function runMigrations(): Promise<MigrationsRunResult> {
+  return apiFetch<MigrationsRunResult>('/admin/migrations/run', { method: 'POST' });
+}

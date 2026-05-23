@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/apiClient';
+import { getMigrationsStatus, runMigrations, type MigrationEntry } from '@/lib/api';
 import {
   Database, Users, Music, Calendar, Activity, RefreshCw,
   Download, CheckCircle, AlertTriangle, Server, Clock,
-  FileText, Trash2, BarChart3,
+  FileText, Trash2, BarChart3, Play, GitCommit,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -65,6 +66,128 @@ function HealthRow({ check }: { check: HealthCheck }) {
         check.status === 'warn' ? 'bg-amber-500/10 text-amber-600' :
         'bg-destructive/10 text-destructive'
       }`}>{check.value}</span>
+    </div>
+  );
+}
+
+// ── Panneau Migrations ────────────────────────────────────────────────────────
+
+function MigrationsPanel() {
+  const [migrations, setMigrations] = useState<MigrationEntry[]>([]);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  const [resultVariant, setResultVariant] = useState<'success' | 'info' | 'error'>('info');
+
+  const loadStatus = async () => {
+    setLoadingStatus(true);
+    try {
+      const data = await getMigrationsStatus();
+      setMigrations(data.migrations ?? []);
+    } catch {
+      // silencieux si pas dev ou API down
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  useEffect(() => { loadStatus(); }, []);
+
+  const handleRun = async () => {
+    if (!confirm('Lancer les migrations en attente ?')) return;
+    setRunning(true);
+    setLastResult(null);
+    try {
+      const res = await runMigrations();
+      setResultVariant(res.applied > 0 ? 'success' : 'info');
+      setLastResult(res.message);
+      if (res.applied > 0) toast.success(res.message);
+      else toast.info(res.message);
+      await loadStatus();
+    } catch (e: any) {
+      const msg = e?.message ?? 'Erreur inconnue';
+      setResultVariant('error');
+      setLastResult(msg);
+      toast.error(msg);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const formatHash = (hash: string) => hash.length > 24 ? hash.slice(0, 12) + '…' + hash.slice(-8) : hash;
+  const formatDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Database className="w-4 h-4 text-accent" /> Migrations base de données
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadStatus}
+            disabled={loadingStatus}
+            title="Rafraîchir"
+            className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingStatus ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={handleRun}
+            disabled={running || loadingStatus}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-accent-foreground text-xs font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50"
+          >
+            <Play className="w-3.5 h-3.5" />
+            {running ? 'Migration en cours…' : 'Lancer les migrations'}
+          </button>
+        </div>
+      </div>
+
+      {/* Résultat de la dernière exécution */}
+      {lastResult && (
+        <div className={`flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg text-xs font-medium ${
+          resultVariant === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' :
+          resultVariant === 'error'   ? 'bg-destructive/10 text-destructive border border-destructive/20' :
+                                        'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+        }`}>
+          {resultVariant === 'success' ? <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> :
+           resultVariant === 'error'   ? <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> :
+                                         <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+          {lastResult}
+        </div>
+      )}
+
+      {/* Liste des migrations appliquées */}
+      {loadingStatus ? (
+        <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Chargement…
+        </div>
+      ) : migrations.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-2">Aucune migration appliquée.</p>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground mb-2 uppercase font-semibold tracking-wide">
+            {migrations.length} migration{migrations.length > 1 ? 's' : ''} appliquée{migrations.length > 1 ? 's' : ''}
+          </p>
+          {migrations.map((m, i) => (
+            <div key={m.hash} className="flex items-center gap-3 py-1.5 border-b border-border/50 last:border-0">
+              <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {i + 1}
+              </span>
+              <GitCommit className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="font-mono text-[11px] text-foreground flex-1 truncate" title={m.hash}>
+                {formatHash(m.hash)}
+              </span>
+              <span className="text-[10px] text-muted-foreground shrink-0">{formatDate(m.applied_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground mt-3">
+        Les migrations sont idempotentes — relancer est sans risque si la base est déjà à jour.
+      </p>
     </div>
   );
 }
@@ -330,6 +453,9 @@ export default function ConfigMaintenance() {
           La purge supprime les entrées de plus de 90 jours.
         </p>
       </div>
+
+      {/* ── Migrations DB (dev only) ── */}
+      <MigrationsPanel />
 
     </div>
   );
