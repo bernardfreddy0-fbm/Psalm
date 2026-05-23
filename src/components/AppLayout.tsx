@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, FileText, CalendarRange, Users, Repeat,
   Music, LogOut, Menu, X, Settings, Key, UserCog, ScrollText,
-  CalendarCheck, Video, BookOpen, ShieldCheck,
+  CalendarCheck, Video, BookOpen, ShieldCheck, ClipboardList,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -40,6 +40,7 @@ const navSections = [
   {
     label: 'CULTE',
     items: [
+      { to: '/conducteur', icon: ClipboardList, label: 'Conducteur' },
       { to: '/predications', icon: BookOpen, label: 'Prédications' },
       { to: '/archives', icon: Video, label: 'AEFV' },
     ],
@@ -69,6 +70,7 @@ const pageTitles: Record<string, string> = {
   '/journal': 'Journal d\'activité',
   '/configuration': 'Configuration',
   '/disponibilites': 'Disponibilités & Absences',
+  '/conducteur': 'Conducteur du culte',
   '/archives': 'AEFV',
   '/predications': 'Prédications',
   '/admin': 'Administration',

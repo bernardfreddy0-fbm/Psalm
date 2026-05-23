@@ -26,6 +26,9 @@ const ROLE_LABELS: Record<string, string> = {
   sonorisateur: 'Sonorisateur',
   projectionniste: 'Projectionniste',
   videaste: 'Vidéaste',
+  responsable_video: 'Resp. Vidéo',
+  referent_planning_video: 'Réf. Planning Vidéo',
+  referent_technique_video: 'Réf. Technique Vidéo',
   responsable_louange: 'Resp. Louange',
   responsable_technique: 'Resp. Technique',
   pasteur: 'Pasteur',
@@ -37,7 +40,7 @@ const POLE_ROLES: Record<string, string[]> = {
   'Musique': ['musicien', 'pianiste', 'batteur', 'guitariste_electrique', 'guitariste_acoustique', 'bassiste'],
   'Sonorisation': ['sonorisateur', 'responsable_technique'],
   'Projection': ['projectionniste'],
-  'Vidéo': ['videaste'],
+  'Vidéo': ['videaste', 'responsable_video', 'referent_planning_video', 'referent_technique_video'],
 };
 
 const CHORISTE_ROLES = ['choriste', 'dirigeant', 'conducteur_louange', 'responsable_louange'];
