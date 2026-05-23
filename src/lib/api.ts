@@ -761,28 +761,89 @@ export async function deleteAbsenceAdmin(id: string): Promise<void> {
 
 // ── Archives vidéo (video_meta) ───────────────────────────────────────────────
 
+export type VideoStatus = 'brut' | 'montage' | 'validation' | 'publie';
+
+export const STATUS_LABELS: Record<VideoStatus, string> = {
+  brut:       'Brut',
+  montage:    'Montage',
+  validation: 'Validation',
+  publie:     'Publié',
+};
+
+export const STATUS_COLORS: Record<VideoStatus, { bg: string; text: string }> = {
+  brut:       { bg: 'bg-zinc-500/15',    text: 'text-zinc-400' },
+  montage:    { bg: 'bg-blue-500/15',    text: 'text-blue-400' },
+  validation: { bg: 'bg-amber-500/15',   text: 'text-amber-400' },
+  publie:     { bg: 'bg-emerald-500/15', text: 'text-emerald-400' },
+};
+
 export interface VideoMetaSummary {
-  video_id: string;
-  preacher: string | null;
-  theme: string | null;
-  tags: string[];
+  video_id:    string;
+  preacher:    string | null;
+  theme:       string | null;
+  status:      VideoStatus;
+  assigned_to: string | null;
+  filmed_by:   string | null;
   checklist: {
-    montage: boolean;
-    subtitles: boolean;
-    thumbnail: boolean;
+    montage:        boolean;
+    subtitles:      boolean;
+    thumbnail:      boolean;
     description_yt: boolean;
-    published: boolean;
+    published:      boolean;
   };
   updated_at: string | null;
 }
 
-export async function getVideoMetaList(): Promise<VideoMetaSummary[]> {
-  // video_meta n'a pas d'endpoint dédié dans AEFApi — retourne vide
-  return [];
+export interface AEFVMember {
+  id:         string;
+  first_name: string;
+  last_name:  string;
+  role:       string | null;
+  phone:      string | null;
+  email:      string;
 }
 
-export async function deleteVideoMeta(_videoId: string): Promise<void> {
-  // video_meta n'a pas d'endpoint dédié dans AEFApi
+export interface VideoAssignment {
+  assignment_id: number;
+  sunday_id:     number;
+  sunday_date:   string;
+  sunday_label:  string | null;
+  videaste: {
+    id:         string;
+    first_name: string;
+    last_name:  string;
+    phone:      string | null;
+  };
+  assigned_by: string | null;
+  note:        string | null;
+  created_at:  string | null;
+}
+
+export async function getVideoMetaList(): Promise<VideoMetaSummary[]> {
+  return apiFetch<VideoMetaSummary[]>('/archives');
+}
+
+export async function deleteVideoMeta(videoId: string): Promise<void> {
+  await apiFetch(`/archives/${videoId}`, { method: 'DELETE' });
+}
+
+export async function getAEFVTeam(): Promise<AEFVMember[]> {
+  return apiFetch<AEFVMember[]>('/archives/team');
+}
+
+export async function getVideoAssignments(year: number, month: number): Promise<VideoAssignment[]> {
+  return apiFetch<VideoAssignment[]>(`/archives/assignments/${year}/${month}`);
+}
+
+export async function saveVideoAssignment(sundayId: number, videasteId: string, note?: string): Promise<void> {
+  await apiFetch(`/archives/assignments/${sundayId}`, {
+    method: 'PUT',
+    json: { videaste_id: videasteId, note: note ?? null },
+  });
+}
+
+export async function removeVideoAssignment(sundayId: number): Promise<void> {
+  await apiFetch(`/archives/assignments/${sundayId}`, { method: 'DELETE' });
 }
 
 // ── Prédications / Sermons ────────────────────────────────────────────────────
