@@ -11,20 +11,23 @@ import {
 } from '@/lib/api';
 import {
   LayoutDashboard, Calendar, Video, Users, BookOpen,
-  Radio, ExternalLink, ChevronUp, ChevronDown,
+  Radio, ChevronUp, ChevronDown,
   Plus, X, Trash2, Phone, MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchYoutubeVideos, fetchVideoStats } from '@/lib/youtube';
+import { mergeVideos } from '@/lib/aefvVideos';
+import { VideosTab } from '@/pages/aefv/VideosTab';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'planning' | 'fiches' | 'equipe' | 'programme';
+type Tab = 'overview' | 'planning' | 'videos' | 'equipe' | 'programme';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'overview',   label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: 'planning',   label: 'Planning',        icon: Calendar },
-  { id: 'fiches',     label: 'Fiches',          icon: Video },
+  { id: 'videos',     label: 'Vidéos',          icon: Video },
   { id: 'equipe',     label: 'Équipe',          icon: Users },
   { id: 'programme',  label: 'Programme',       icon: BookOpen },
 ];
@@ -312,73 +315,6 @@ function PlanningTab({ sundays, team }: { sundays: NextSunday[]; team: AEFVMembe
   );
 }
 
-function FichesTab({ videos }: { videos: VideoMetaSummary[] }) {
-  const [filterStatus, setFilterStatus] = useState<VideoStatus | 'all'>('all');
-  const filtered = useMemo(() =>
-    filterStatus === 'all' ? videos : videos.filter(v => v.status === filterStatus),
-    [videos, filterStatus]
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1">
-        {(['all', 'brut', 'montage', 'validation', 'publie'] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-              ${filterStatus === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
-          >
-            {s === 'all' ? `Tous (${videos.length})` : `${STATUS_LABELS[s]} (${videos.filter(v => v.status === s).length})`}
-          </button>
-        ))}
-      </div>
-      <div className="rounded-xl border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Vidéo</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Thème</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Statut</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground hidden sm:table-cell">Filmé par</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(v => (
-              <tr key={v.video_id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3">
-                  <a
-                    href={`https://youtube.com/watch?v=${v.video_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 group"
-                  >
-                    <img src={`https://img.youtube.com/vi/${v.video_id}/default.jpg`} alt="" className="w-16 h-9 object-cover rounded" />
-                    <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                  </a>
-                </td>
-                <td className="px-4 py-3">
-                  <p className="text-sm truncate max-w-[180px]">{v.theme ?? '—'}</p>
-                  {v.preacher && <p className="text-xs text-muted-foreground">{v.preacher}</p>}
-                </td>
-                <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
-                <td className="px-4 py-3 hidden sm:table-cell">
-                  <span className="text-xs text-muted-foreground">{v.filmed_by ?? '—'}</span>
-                </td>
-                <td className="px-4 py-3" />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <div className="py-10 text-center text-sm text-muted-foreground">Aucune vidéo pour ce filtre</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function EquipeTab({ team }: { team: AEFVMember[] }) {
   const ROLE_ORDER = ['responsable_video', 'referent_planning_video', 'referent_technique_video', 'videaste'];
   const sorted = [...team].sort((a, b) => {
@@ -574,6 +510,24 @@ export default function AefvPage() {
     queryFn:  getAEFVTeam,
   });
 
+  const channelQuery = useQuery({
+    queryKey: ['yt-channel-admin'],
+    queryFn:  fetchYoutubeVideos,
+    retry: false,
+  });
+  const channelVideos = channelQuery.data ?? [];
+
+  const statsQuery = useQuery({
+    queryKey: ['yt-stats-admin', channelVideos.map(v => v.videoId).join(',')],
+    queryFn:  () => fetchVideoStats(channelVideos.map(v => v.videoId)),
+    enabled:  channelVideos.length > 0,
+  });
+
+  const merged = useMemo(
+    () => mergeVideos(channelVideos, videos, statsQuery.data ?? new Map()),
+    [channelVideos, videos, statsQuery.data],
+  );
+
   return (
     <div className="space-y-5">
       <div>
@@ -601,7 +555,14 @@ export default function AefvPage() {
       <div>
         {activeTab === 'overview'  && <OverviewTab  sundays={sundays} videos={videos} team={team} />}
         {activeTab === 'planning'  && <PlanningTab  sundays={sundays} team={team} />}
-        {activeTab === 'fiches'    && <FichesTab    videos={videos} />}
+        {activeTab === 'videos'    && (
+          <VideosTab
+            merged={merged}
+            team={team}
+            channelError={channelQuery.isError}
+            isLoading={channelQuery.isLoading && videos.length === 0}
+          />
+        )}
         {activeTab === 'equipe'    && <EquipeTab    team={team} />}
         {activeTab === 'programme' && <ProgrammeTab sundays={sundays} />}
       </div>
