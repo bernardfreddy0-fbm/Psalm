@@ -42,7 +42,7 @@ const navSections = [
     items: [
       { to: '/conducteur', icon: ClipboardList, label: 'Conducteur' },
       { to: '/predications', icon: BookOpen, label: 'Prédications' },
-      { to: '/archives', icon: Video, label: 'AEFV' },
+      { to: '/aefv', icon: Video, label: 'AEFV' },
     ],
   },
   {
@@ -71,7 +71,7 @@ const pageTitles: Record<string, string> = {
   '/configuration': 'Configuration',
   '/disponibilites': 'Disponibilités & Absences',
   '/conducteur': 'Conducteur du culte',
-  '/archives': 'AEFV',
+  '/aefv': 'AEFV',
   '/predications': 'Prédications',
   '/admin': 'Administration',
 };

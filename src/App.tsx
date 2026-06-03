@@ -18,7 +18,7 @@ import AccesPage from "@/pages/AccesPage";
 import JournalPage from "@/pages/JournalPage";
 import ConfigurationPage from "@/pages/ConfigurationPage";
 import DisponibilitesPage from "@/pages/DisponibilitesPage";
-import ArchivesAdminPage from "@/pages/ArchivesAdminPage";
+import AefvPage from "@/pages/AefvPage";
 import ConducteurAdminPage from "@/pages/ConducteurAdminPage";
 import PredicationsPage from "@/pages/PredicationsPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
@@ -69,7 +69,8 @@ function AppRoutes() {
             <Route path="/configuration" element={<Guard action="config_edit"><ConfigurationPage /></Guard>} />
             <Route path="/disponibilites" element={<Guard action="planning_view"><DisponibilitesPage /></Guard>} />
             <Route path="/conducteur" element={<Guard action="planning_edit"><ConducteurAdminPage /></Guard>} />
-            <Route path="/archives" element={<Guard action="archives_view"><ArchivesAdminPage /></Guard>} />
+            <Route path="/aefv" element={<Guard action="archives_view"><AefvPage /></Guard>} />
+            <Route path="/archives" element={<Navigate to="/aefv" replace />} />
             <Route path="/predications" element={<Guard action="config_view"><PredicationsPage /></Guard>} />
           </Route>
           <Route path="*" element={<NotFound />} />

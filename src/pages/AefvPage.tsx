@@ -556,7 +556,7 @@ function ProgrammeTab({ sundays }: { sundays: NextSunday[] }) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function ArchivesAdminPage() {
+export default function AefvPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   const { data: sundays = [] } = useQuery({
