@@ -234,6 +234,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(v => !v)}
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
                 style={{ color: 'rgba(148,163,184,0.5)' }}
               >
