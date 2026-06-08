@@ -1,6 +1,6 @@
 # Plan — Code-splitting des routes (Psalm admin)
 
-> **For agentic workers:** Implémenter ce plan tâche par tâche. Les étapes utilisent la syntaxe checkbox (`- [ ]`) pour le suivi. UN incrément cohérent par passage, vérifié au build, puis commit + push `fork main`. NE PAS déployer en prod (garde-fou).
+> **For agentic workers:** Implémenter ce plan tâche par tâche. Les étapes utilisent la syntaxe checkbox (`- [ ]`) pour le suivi. UN incrément cohérent par passage, vérifié (lint + test + build + **e2e**), puis commit + push sur la branche **`autopilot/code-splitting-routes`**. ⚠️ NE JAMAIS pousser sur `main` (push main = déploiement Coolify auto). Le déploiement reste un merge manuel de l'utilisateur.
 
 ## Objectif
 Réduire le bundle initial (~1,4 Mo / 419 Ko gzip aujourd'hui) en chargeant les pages authentifiées en **lazy** (`React.lazy` + `Suspense`), pour que chaque route ait son propre chunk et que la première peinture ne télécharge plus tout le code de l'admin. Aucun changement fonctionnel visible attendu.
@@ -41,20 +41,29 @@ cd /Users/fbm/Desktop/Psalm && npm run lint && npm run build
 ```
 Attendu : build `✓ built`, zéro erreur TS, et **plusieurs** fichiers `dist/assets/*.js` (un chunk par page lazy) au lieu d'un unique gros `index-*.js`. Le chunk d'entrée doit être nettement plus petit qu'avant (~1,4 Mo).
 
-- [ ] **Step 4 : Vérifier les tests**
+- [ ] **Step 4 : Vérifier les tests unitaires**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm && npm run test
 ```
 Attendu : tous les tests passent (les 11 existants au minimum). Si un test rend `App` et casse à cause du lazy, l'envelopper dans `Suspense`/`act` ou attendre le chargement — adapter le test, pas la logique.
 
-- [ ] **Step 5 : Commit + push**
+- [ ] **Step 5 : Vérifier le test fonctionnel e2e**
+
+```bash
+cd /Users/fbm/Desktop/Psalm && npm run e2e
+```
+Attendu : smoke test vert — l'app boote dans un navigateur, page de login visible, **aucun chunk JS/CSS en échec** (c'est LA vérif qui prouve que le lazy-loading ne casse rien au runtime), pas d'erreur console fatale.
+
+- [ ] **Step 6 : Commit + push (branche, jamais main)**
+
+⚠️ Ne jamais pousser sur `main` (déploiement). Pousser uniquement la branche autopilot.
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
 git add src/App.tsx src/**/*.test.tsx 2>/dev/null
 git commit -m "perf(admin): lazy-load des routes authentifiées (code-splitting)"
-git push fork main
+git push fork autopilot/code-splitting-routes
 ```
 
 ---
@@ -82,7 +91,7 @@ Attendu : plus de chunk unique > 500 Ko, ou au moins une réduction nette du chu
 cd /Users/fbm/Desktop/Psalm
 git add vite.config.ts
 git commit -m "perf(admin): manualChunks pour isoler les vendors lourds"
-git push fork main
+git push fork autopilot/code-splitting-routes
 ```
 
 ---
@@ -91,7 +100,7 @@ git push fork main
 
 - [ ] **Step 1 : Récap final**
 
-Vérifier `npm run lint && npm run test && npm run build` tous verts. Noter la taille du nouveau chunk d'entrée vs l'ancien (~1,4 Mo / 419 Ko gzip) dans le message de commit ou le résumé. Le déploiement prod reste **manuel** (non couvert ici).
+Vérifier `npm run lint && npm run test && npm run build && npm run e2e` tous verts. Noter la taille du nouveau chunk d'entrée vs l'ancien (~1,4 Mo / 419 Ko gzip) dans le message de commit ou le résumé. Le déploiement prod reste **manuel** : l'utilisateur merge `autopilot/code-splitting-routes` → `main` quand il valide.
 
 ---
 
