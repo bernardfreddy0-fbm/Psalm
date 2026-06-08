@@ -32,7 +32,7 @@
 - Create: `src/lib/aefvVideos.ts`
 - Test: `src/lib/aefvVideos.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue**
+- [x] **Step 1: Écrire le test qui échoue**
 
 ```typescript
 // src/lib/aefvVideos.test.ts
@@ -133,12 +133,12 @@ describe('computeAefvKpis', () => {
 });
 ```
 
-- [ ] **Step 2: Lancer le test pour vérifier l'échec**
+- [x] **Step 2: Lancer le test pour vérifier l'échec**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npx vitest run src/lib/aefvVideos.test.ts`
 Expected: FAIL — `Failed to resolve import "./aefvVideos"`.
 
-- [ ] **Step 3: Implémenter la logique pure**
+- [x] **Step 3: Implémenter la logique pure**
 
 ```typescript
 // src/lib/aefvVideos.ts
@@ -238,12 +238,12 @@ export function computeAefvKpis(merged: MergedVideo[], now: Date = new Date()): 
 }
 ```
 
-- [ ] **Step 4: Lancer le test pour vérifier le succès**
+- [x] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npx vitest run src/lib/aefvVideos.test.ts`
 Expected: PASS (toutes assertions vertes).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
@@ -260,14 +260,14 @@ git commit -m "feat(aefv): logique pure de fusion vidéothèque + fiches (mergeV
 - Modify: `src/App.tsx:21`, `src/App.tsx:72`
 - Modify: `src/components/AppLayout.tsx:45`, `src/components/AppLayout.tsx:74`
 
-- [ ] **Step 1: Renommer le fichier de page**
+- [x] **Step 1: Renommer le fichier de page**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
 git mv src/pages/ArchivesAdminPage.tsx src/pages/AefvPage.tsx
 ```
 
-- [ ] **Step 2: Renommer le composant exporté**
+- [x] **Step 2: Renommer le composant exporté**
 
 Dans `src/pages/AefvPage.tsx`, remplacer la signature du composant :
 
@@ -276,7 +276,7 @@ Dans `src/pages/AefvPage.tsx`, remplacer la signature du composant :
 export default function AefvPage() {
 ```
 
-- [ ] **Step 3: Mettre à jour App.tsx (import + route + redirection)**
+- [x] **Step 3: Mettre à jour App.tsx (import + route + redirection)**
 
 Dans `src/App.tsx` ligne 21, remplacer l'import :
 
@@ -293,7 +293,7 @@ Ligne 72, remplacer la route par la nouvelle route + une redirection de compatib
 
 (`Navigate` est déjà importé ligne 2.)
 
-- [ ] **Step 4: Mettre à jour la navigation**
+- [x] **Step 4: Mettre à jour la navigation**
 
 Dans `src/components/AppLayout.tsx` ligne 45 :
 
@@ -307,12 +307,12 @@ Ligne 74 (table `pageTitles`) — remplacer la clé :
   '/aefv': 'AEFV',
 ```
 
-- [ ] **Step 5: Vérifier le build**
+- [x] **Step 5: Vérifier le build**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npm run build`
 Expected: build OK (`✓ built`), aucune erreur TypeScript de référence à `ArchivesAdminPage`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
@@ -329,7 +329,7 @@ git commit -m "refactor(aefv): route /archives -> /aefv (+ redirection) et renom
 
 Ce composant reçoit les vidéos fusionnées + l'état de chargement/erreur du flux chaîne, et l'équipe (pour résoudre l'assigné). Il n'effectue aucun fetch lui-même (fait en Task 4).
 
-- [ ] **Step 1: Créer le composant**
+- [x] **Step 1: Créer le composant**
 
 ```tsx
 // src/pages/aefv/VideosTab.tsx
@@ -533,12 +533,12 @@ export function VideosTab({
 }
 ```
 
-- [ ] **Step 2: Vérifier le build (composant isolé compile)**
+- [x] **Step 2: Vérifier le build (composant isolé compile)**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npm run build`
 Expected: build OK. (Le composant n'est pas encore branché ; il doit compiler. S'il signale `VideosTab` non utilisé, c'est attendu — il sera branché en Task 4. Si la règle `noUnusedLocals` bloque l'export inutilisé, passer directement à Task 4 puis builder.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
@@ -553,7 +553,7 @@ git commit -m "feat(aefv): composant VideosTab (pipeline + catalogue + KPI)"
 **Files:**
 - Modify: `src/pages/AefvPage.tsx`
 
-- [ ] **Step 1: Mettre à jour les imports en tête de `AefvPage.tsx`**
+- [x] **Step 1: Mettre à jour les imports en tête de `AefvPage.tsx`**
 
 Ajouter sous les imports existants de `lucide-react` / `@/lib/api` :
 
@@ -563,7 +563,7 @@ import { mergeVideos } from '@/lib/aefvVideos';
 import { VideosTab } from '@/pages/aefv/VideosTab';
 ```
 
-- [ ] **Step 2: Changer le type Tab et les onglets**
+- [x] **Step 2: Changer le type Tab et les onglets**
 
 Remplacer la définition (vers le haut du fichier) :
 
@@ -579,11 +579,11 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 ```
 
-- [ ] **Step 3: Supprimer l'ancien `FichesTab`**
+- [x] **Step 3: Supprimer l'ancien `FichesTab`**
 
 Supprimer entièrement la fonction `function FichesTab({ videos }: { videos: VideoMetaSummary[] }) { … }` (le bloc allant de sa signature jusqu'à son `}` final). Le composant `StatusBadge` défini plus haut dans le fichier reste utilisé par d'autres onglets — ne pas le supprimer.
 
-- [ ] **Step 4: Ajouter les fetchs chaîne + fusion dans le composant `AefvPage`**
+- [x] **Step 4: Ajouter les fetchs chaîne + fusion dans le composant `AefvPage`**
 
 Dans `AefvPage()`, sous les `useQuery` existants (`sundays`, `videos`, `team`), ajouter :
 
@@ -609,7 +609,7 @@ Dans `AefvPage()`, sous les `useQuery` existants (`sundays`, `videos`, `team`), 
 
 (`useMemo` est déjà importé ligne 1.)
 
-- [ ] **Step 5: Brancher l'onglet dans le rendu**
+- [x] **Step 5: Brancher l'onglet dans le rendu**
 
 Remplacer la ligne :
 
@@ -630,12 +630,12 @@ par :
 )}
 ```
 
-- [ ] **Step 6: Vérifier le build**
+- [x] **Step 6: Vérifier le build**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npm run build`
 Expected: build OK, aucune référence restante à `FichesTab` ni à `'fiches'`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
@@ -650,7 +650,7 @@ git commit -m "feat(aefv): onglet Vidéos unifié remplace Fiches (fusion chaîn
 **Files:**
 - Create: `src/pages/aefv/VideosTab.test.tsx`
 
-- [ ] **Step 1: Écrire le test de rendu**
+- [x] **Step 1: Écrire le test de rendu**
 
 ```tsx
 // src/pages/aefv/VideosTab.test.tsx
@@ -701,12 +701,12 @@ describe('VideosTab', () => {
 });
 ```
 
-- [ ] **Step 2: Lancer le test**
+- [x] **Step 2: Lancer le test**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npx vitest run src/pages/aefv/VideosTab.test.tsx`
 Expected: PASS. (Si `@testing-library/jest-dom` n'est pas configuré globalement, remplacer `toBeInTheDocument()` par `expect(screen.queryByText(...)).not.toBeNull()` ; vérifier d'abord `src/test/setup.ts` ou la config `vitest.config.ts`.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
@@ -720,17 +720,17 @@ git commit -m "test(aefv): rendu VideosTab (pipeline/catalogue/recherche/erreur 
 
 **Files:** aucun (vérification).
 
-- [ ] **Step 1: Lancer toute la suite de tests**
+- [x] **Step 1: Lancer toute la suite de tests**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npm run test`
 Expected: tous les tests passent (dont `aefvVideos.test.ts` et `VideosTab.test.tsx`).
 
-- [ ] **Step 2: Build de production**
+- [x] **Step 2: Build de production**
 
 Run: `cd /Users/fbm/Desktop/Psalm && npm run build`
 Expected: `✓ built`, zéro erreur TypeScript.
 
-- [ ] **Step 3: Vérifier l'absence de références mortes**
+- [x] **Step 3: Vérifier l'absence de références mortes**
 
 Run: `cd /Users/fbm/Desktop/Psalm && grep -rn "ArchivesAdminPage\|FichesTab\|'fiches'\|/archives" src/`
 Expected: seules occurrences acceptables = la redirection `/archives` -> `/aefv` dans `App.tsx`, et d'éventuels appels API `apiFetch('/archives')` dans `src/lib/api.ts` (endpoints backend, à NE PAS toucher). Aucune référence à `ArchivesAdminPage`, `FichesTab` ou au tab `'fiches'`.
