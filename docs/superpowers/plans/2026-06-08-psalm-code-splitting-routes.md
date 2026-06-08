@@ -74,18 +74,18 @@ git push fork autopilot/code-splitting-routes
 
 Ne traiter que si après Task 1 le warning « chunks larger than 500 kB » persiste sur le chunk d'entrée.
 
-- [ ] **Step 1 : Ajouter `manualChunks` pour isoler les libs lourdes**
+- [x] **Step 1 : Ajouter `manualChunks` pour isoler les libs lourdes**
 
 Dans `vite.config.ts`, sous `build.rollupOptions.output`, ajouter un `manualChunks` qui regroupe les dépendances volumineuses repérées au build (`html2canvas`, `jspdf`/`purify`, `@tanstack/react-query`, `recharts` si présent) dans des vendors séparés. Vérifier les noms réels dans `package.json` avant d'écrire la liste.
 
-- [ ] **Step 2 : Vérifier le build**
+- [x] **Step 2 : Vérifier le build**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm && npm run build
 ```
 Attendu : plus de chunk unique > 500 Ko, ou au moins une réduction nette du chunk d'entrée. Pas de régression de tests.
 
-- [ ] **Step 3 : Commit + push**
+- [x] **Step 3 : Commit + push**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm
