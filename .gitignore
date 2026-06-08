@@ -25,3 +25,7 @@ dist-ssr
 .gstack/
 .env*.local
 .worktrees/
+
+# Playwright
+/test-results/
+/playwright-report/
