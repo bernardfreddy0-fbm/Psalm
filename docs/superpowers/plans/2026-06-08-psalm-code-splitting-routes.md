@@ -17,7 +17,7 @@ Réduire le bundle initial (~1,4 Mo / 419 Ko gzip aujourd'hui) en chargeant les 
 
 **Files:** `src/App.tsx`
 
-- [ ] **Step 1 : Convertir les imports de pages en `React.lazy`**
+- [x] **Step 1 : Convertir les imports de pages en `React.lazy`**
 
 Remplacer les imports eager des 15 pages authentifiées par des imports paresseux. Ajouter `lazy` et `Suspense` depuis `react`. Exemple de transformation :
 
@@ -30,32 +30,32 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 
 Conserver en imports normaux : `LoginPage`, `ResetPasswordPage`, `AppLayout`, `NotFound`, et tous les non-pages (providers, Guard, contexts, UI). En tête de fichier : `import { lazy, Suspense } from "react";`.
 
-- [ ] **Step 2 : Envelopper les routes authentifiées dans un `<Suspense>`**
+- [x] **Step 2 : Envelopper les routes authentifiées dans un `<Suspense>`**
 
 Entourer le bloc `<Route element={<AppLayout />}> ... </Route>` (ou le `<Routes>` authentifié) d'un `<Suspense fallback={...}>`. Le fallback doit être discret et cohérent avec le design existant (réutiliser un spinner/skeleton déjà présent dans `src/components` si disponible — chercher `Loader`, `Spinner`, `Skeleton` ; sinon un simple `<div className="flex h-screen items-center justify-center">…</div>`). Ne pas casser le `basename="/admin"` du Router.
 
-- [ ] **Step 3 : Vérifier lint + build**
+- [x] **Step 3 : Vérifier lint + build**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm && npm run lint && npm run build
 ```
 Attendu : build `✓ built`, zéro erreur TS, et **plusieurs** fichiers `dist/assets/*.js` (un chunk par page lazy) au lieu d'un unique gros `index-*.js`. Le chunk d'entrée doit être nettement plus petit qu'avant (~1,4 Mo).
 
-- [ ] **Step 4 : Vérifier les tests unitaires**
+- [x] **Step 4 : Vérifier les tests unitaires**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm && npm run test
 ```
 Attendu : tous les tests passent (les 11 existants au minimum). Si un test rend `App` et casse à cause du lazy, l'envelopper dans `Suspense`/`act` ou attendre le chargement — adapter le test, pas la logique.
 
-- [ ] **Step 5 : Vérifier le test fonctionnel e2e**
+- [x] **Step 5 : Vérifier le test fonctionnel e2e**
 
 ```bash
 cd /Users/fbm/Desktop/Psalm && npm run e2e
 ```
 Attendu : smoke test vert — l'app boote dans un navigateur, page de login visible, **aucun chunk JS/CSS en échec** (c'est LA vérif qui prouve que le lazy-loading ne casse rien au runtime), pas d'erreur console fatale.
 
-- [ ] **Step 6 : Commit + push (branche, jamais main)**
+- [x] **Step 6 : Commit + push (branche, jamais main)**
 
 ⚠️ Ne jamais pousser sur `main` (déploiement). Pousser uniquement la branche autopilot.
 
