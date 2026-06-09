@@ -1,0 +1,23 @@
+name: Déploiement Coolify au merge d'une PR
+
+# Déclenche un rebuild Coolify UNIQUEMENT quand une PR est mergée dans main.
+# Un push direct sur main (ex. setup) ne déclenche PAS de déploiement.
+# => Merger une PR depuis GitHub Mobile = déployer en prod, en un tap.
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher le rebuild Coolify
+        env:
+          DEPLOY_URL: ${{ secrets.COOLIFY_DEPLOY_URL }}
+          DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "PR #${PR_NUMBER} mergée → déploiement…"
+          curl -fsS -X GET "$DEPLOY_URL" -H "Authorization: Bearer $DEPLOY_TOKEN"
+          echo "Webhook Coolify appelé."
