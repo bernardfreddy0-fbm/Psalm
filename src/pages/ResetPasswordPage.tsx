@@ -45,8 +45,9 @@ export default function ResetPasswordPage() {
       toast.success('Mot de passe mis à jour');
       clearTokens();
       navigate('/');
-    } catch (err: any) {
-      toast.error('Erreur', { description: err?.message ?? 'Une erreur inattendue est survenue.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Une erreur inattendue est survenue.';
+      toast.error('Erreur', { description: msg });
     } finally {
       setLoading(false);
     }
