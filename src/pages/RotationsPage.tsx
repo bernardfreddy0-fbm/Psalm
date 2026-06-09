@@ -9,8 +9,8 @@ type ViewTab = 'overview' | 'members' | 'equity' | 'roles';
 
 export default function RotationsPage() {
   const navigate = useNavigate();
-  const [sundays, setSundays] = useState<any[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  const [sundays, setSundays] = useState<Awaited<ReturnType<typeof getPlanning>>>([]);
+  const [members, setMembers] = useState<Awaited<ReturnType<typeof getMembers>>>([]);
   const [loading, setLoading] = useState(true);
   const [viewTab, setViewTab] = useState<ViewTab>('overview');
   const [roleFilter, setRoleFilter] = useState('Tous');
