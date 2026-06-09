@@ -139,8 +139,8 @@ export default function PermissionsPage() {
       setChanged(false);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 4000);
-    } catch (e: any) {
-      const msg = e?.message || 'Erreur inconnue';
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
       setSaveError(msg);
       setTimeout(() => setSaveError(null), 8000);
     } finally {

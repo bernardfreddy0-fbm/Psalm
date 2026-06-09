@@ -19,7 +19,7 @@ function SermonRow({ sermon, onDelete }: { sermon: Sermon; onDelete: () => void 
       setEditing(false);
       toast.success('Prédication enregistrée');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -146,13 +146,13 @@ export default function PredicationsPage() {
       setNewForm({ ...EMPTY });
       toast.success('Prédication ajoutée');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
     mutationFn: deleteSermon,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sermons'] }),
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const filtered = sermons.filter(s => {

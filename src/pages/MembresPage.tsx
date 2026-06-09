@@ -54,10 +54,11 @@ function parseRoles(role: string): string[] {
 
 type SortOrder = 'A → Z' | 'Z → A' | 'Par rôle';
 type ViewMember = { first_name: string; last_name: string; email: string; phone: string; roles: string[] } | null;
+type Member = { first_name: string; last_name: string; email: string; phone: string; role: string; is_active: string };
 
 export default function MembresPage() {
   const navigate = useNavigate();
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activePole, setActivePole] = useState('Tous');
@@ -85,7 +86,7 @@ export default function MembresPage() {
     return (ROLE_LABELS[roleA] || roleA).localeCompare(ROLE_LABELS[roleB] || roleB);
   });
 
-  const countByPole = (roles: string[]) => (member: any) => parseRoles(member.role).some(r => roles.includes(r));
+  const countByPole = (roles: string[]) => (member: Member) => parseRoles(member.role).some(r => roles.includes(r));
   const nbChoristes = members.filter(countByPole(CHORISTE_ROLES)).length;
   const nbMusiciens = members.filter(countByPole(MUSICIEN_ROLES)).length;
   const nbTech = members.filter(countByPole(TECH_ROLES)).length;
