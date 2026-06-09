@@ -131,7 +131,7 @@ export default function DashboardPage() {
   // Alert: any critical culte in the next 14 days?
   const alertSunday = useMemo(() =>
     nextSundays.find(s => {
-      const daysUntil = Math.ceil((new Date(s.date).getTime() - today.getTime()) / 86400000);
+      const daysUntil = Math.ceil((new Date(s.date).getTime() - Date.now()) / 86400000);
       return daysUntil <= 14 && (!s.dirigeant || !s.son);
     }),
   [nextSundays]);

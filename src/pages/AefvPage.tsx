@@ -515,7 +515,9 @@ export default function AefvPage() {
     queryFn:  fetchYoutubeVideos,
     retry: false,
   });
-  const channelVideos = channelQuery.data ?? [];
+  // Mémoïsé : sinon `?? []` crée un nouveau tableau à chaque rendu et invalide
+  // en permanence les deps du useMemo `merged`.
+  const channelVideos = useMemo(() => channelQuery.data ?? [], [channelQuery.data]);
 
   const statsQuery = useQuery({
     queryKey: ['yt-stats-admin', channelVideos.map(v => v.videoId).join(',')],

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { getPlanning, getSpecialEvents, createSpecialEvent, deleteSpecialEvent, loadPrograms, type SpecialEvent } from '@/lib/api';
 import { CalendarRange, ChevronLeft, ChevronRight, Plus, X, RefreshCw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,7 +75,7 @@ export default function EvenementsPage() {
   const [newEventForm, setNewEventForm] = useState<NewEventForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setLoading(true);
     Promise.all([
       getPlanning(currentYear).catch(() => [] as any[]),
@@ -91,9 +91,10 @@ export default function EvenementsPage() {
         .filter(d => d.startsWith(String(currentYear)) && !sundayDatesSet.has(d));
       setprogrammeDates(progDates);
     }).finally(() => setLoading(false));
-  };
+  }, [currentYear]);
 
-  useEffect(() => { loadData(); }, [currentYear, currentMonth]);
+  // currentMonth conservé : la navigation de mois rafraîchit aussi les données
+  useEffect(() => { loadData(); }, [loadData, currentMonth]);
 
   // Build a map: date → list of items (sundays + special events + programme du culte)
   const dateMap = useMemo(() => {
