@@ -98,7 +98,7 @@ git push fork autopilot/code-splitting-routes
 
 ## Task 3 : Clôture
 
-- [ ] **Step 1 : Récap final**
+- [x] **Step 1 : Récap final**
 
 Vérifier `npm run lint && npm run test && npm run build && npm run e2e` tous verts. Noter la taille du nouveau chunk d'entrée vs l'ancien (~1,4 Mo / 419 Ko gzip) dans le message de commit ou le résumé. Le déploiement prod reste **manuel** : l'utilisateur merge `autopilot/code-splitting-routes` → `main` quand il valide.
 
