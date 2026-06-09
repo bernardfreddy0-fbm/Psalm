@@ -1,51 +1,40 @@
-# Plan — Finitions UI Psalm admin (MonthKanban + badges Dashboard)
+# Plan — Hygiène code Psalm admin (hooks deps + typage)
 
 > **For agentic workers :** implémenter tâche par tâche, UN incrément cohérent par passage. Vérifs (lint + test + build + **e2e**) vertes avant tout commit. Commit + push sur la branche **`autopilot/finitions-ui`** + PR vers main (ouvrir/mettre à jour UNE PR pour la branche). ⚠️ JAMAIS de push `main` (merge = humain = déploiement Coolify). Cocher l'étape (`- [ ]`→`- [x]`) après réussite.
 
+> ℹ️ **Note (audit 2026-06-10)** : les anciens bugs « MonthKanban composants internes » et « badges Dashboard classes Tailwind dynamiques » sont DÉJÀ corrigés (vérifié : composants au niveau module, couleurs littérales statiques). Ce plan remplace ces cibles par les vraies trouvailles de l'audit lint du 2026-06-10 : 161 erreurs (dont 157 `no-explicit-any`) + 3 `react-hooks/exhaustive-deps`.
+
 ## Objectif
-Corriger les 2 défauts UI connus de longue date, à comportement fonctionnel constant :
-1. `MonthKanban.tsx` : des composants sont définis À L'INTÉRIEUR du corps du composant parent → recréés à chaque render, mémoïsation cassée (perf + perte de focus potentielle).
-2. `DashboardPage` : badges de pôles construits avec des classes Tailwind dynamiques (interpolées) → purgées au build → badges sans couleur en prod.
+Comportement fonctionnel constant. Corriger les 3 dépendances de hooks manquantes (risque de données périmées) puis réduire la dette `any` fichier par fichier.
 
 ## Garde-fous
 - UN incrément (un Step) par passage du cron.
-- Refactor à comportement strictement constant (mêmes données, même UI rendue — couleurs des badges ENFIN visibles = le seul changement visible attendu).
 - Jamais de commit si lint/test/build/e2e échoue → `git restore`.
+- Typage : remplacer `any` par le VRAI type (interface existante, `unknown` + narrowing) — JAMAIS de cast de complaisance ni de `// eslint-disable`.
 - Pas de modif `.env*`, pas de backend.
 
 ---
 
-## Task 1 : MonthKanban — sortir les composants internes
+## Task 1 : Dépendances de hooks manquantes (3 cas précis)
 
-**Files :** `src/components/.../MonthKanban.tsx` (localiser via `grep -r "MonthKanban" src/`), éventuels nouveaux fichiers à côté.
+- [ ] **Step 1 : `src/pages/AefvPage.tsx:518`**
+`channelVideos` (expression logique) rend les deps du `useMemo` (l.528) instables. Envelopper l'initialisation de `channelVideos` dans son propre `useMemo` comme le suggère la règle. Vérifier que l'onglet Vidéos (Pipeline/Catalogue) rend à l'identique. Commit.
 
-- [ ] **Step 1 : Cartographier**
-Lire `MonthKanban.tsx` en entier. Lister les composants/fonctions définis dans le corps du composant (closures sur props/state). Noter pour chacun : props nécessaires une fois extrait. Étape d'analyse — consigner la liste dans le plan (sous ce step), commit du plan seul autorisé.
+- [ ] **Step 2 : `src/pages/DashboardPage.tsx:137`**
+`useMemo` avec dep manquante `today`. Soit inclure `today`, soit sortir `today` du scope réactif (constante module ou `useRef`) selon l'intention RÉELLE du code (lire avant de décider). Commit.
 
-- [ ] **Step 2 : Extraire les composants au niveau module**
-Sortir chaque composant interne au niveau module (même fichier ou fichier voisin), props explicites typées, `memo()` si pertinent. Aucun changement de rendu. Vérifs vertes. Commit `refactor(kanban): composants internes extraits (mémoïsation)`.
+- [ ] **Step 3 : `src/pages/EvenementsPage.tsx:96`**
+`useEffect` avec dep manquante `loadData`. Stabiliser `loadData` avec `useCallback` puis l'ajouter aux deps (pas de désactivation de règle). Vérifier qu'on ne crée PAS de boucle de re-fetch (loadData ne doit dépendre que de valeurs stables). Commit.
 
-- [ ] **Step 3 : Vérifier le comportement**
-Lancer l'e2e + vérifier manuellement via `npm run build && npx vite preview` que la page planning/kanban rend comme avant (DOM stable). Vérifs vertes. Commit éventuel de finition.
+## Task 2 : Réduction `no-explicit-any` (157 → 0, par lots)
 
----
+- [ ] **Step 1 : Inventaire trié**
+`npm run lint -- --format json` → compter les `any` par fichier, traiter du plus gros au plus petit. Coller l'inventaire sous ce step. Commit du plan seul autorisé.
 
-## Task 2 : DashboardPage — badges pôles sans couleur en prod
-
-**Files :** `src/pages/DashboardPage.tsx` (ou composant badge associé — localiser via `grep -rn "bg-\${" src/ ; grep -rn "text-\${" src/`).
-
-- [ ] **Step 1 : Identifier toutes les classes dynamiques**
-Repérer chaque endroit où une classe Tailwind est interpolée (`bg-${color}-100`, etc.) dans le Dashboard ET ailleurs (`grep -rn '\${' src/ | grep -E 'bg-|text-|border-'`). Lister les occurrences sous ce step.
-
-- [ ] **Step 2 : Remplacer par un mapping statique**
-Remplacer l'interpolation par un objet `Record<Pole, string>` contenant les classes COMPLÈTES littérales (ex. `{ choristes: "bg-purple-100 text-purple-800", ... }`), de sorte que le scanner Tailwind les voie. Pas de safelist globale. Vérifs vertes. Commit `fix(dashboard): classes badges statiques (purge Tailwind)`.
-
-- [ ] **Step 3 : Preuve build**
-Vérifier que les classes sont bien présentes dans le CSS du build : `npm run build && grep -o 'bg-purple-100' dist/assets/*.css | head -1` (adapter aux couleurs réelles). Vérifs vertes. Mettre la preuve dans le résumé du commit/PR.
-
----
+- [ ] **Step 2..N : UN fichier (ou groupe ≤ 20 erreurs) par passage**
+Typer correctement, vérifs vertes, commit `fix(types): <fichier> sans any (xx restants)`. Répéter à chaque passage du cron jusqu'à 0. Mettre à jour le compteur dans le titre du commit.
 
 ## Task 3 : Clôture
 
 - [ ] **Step 1 : Vérif finale + PR prête**
-`npm run lint && npm run test && npm run build && npm run e2e` verts. PR `autopilot/finitions-ui` → main à jour avec un résumé : avant/après MonthKanban (nb composants extraits), liste des badges corrigés + preuve CSS. L'humain merge depuis le téléphone → déploiement auto.
+`npm run lint` → **0 erreur** `no-explicit-any` et `exhaustive-deps`. Lint + test + build + e2e verts. PR résumée (avant/après par règle). L'humain merge depuis le téléphone.
