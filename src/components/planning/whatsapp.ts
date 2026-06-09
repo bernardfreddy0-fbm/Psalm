@@ -18,7 +18,7 @@ export function buildWhatsAppMessage(s: Sunday): string {
   const date = new Date(s.date + 'T00:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
-  const title = !!s.is_jeunesse ? '🌟 Culte Jeunesse' : '✝️ Culte du Dimanche';
+  const title = s.is_jeunesse ? '🌟 Culte Jeunesse' : '✝️ Culte du Dimanche';
 
   const lines: string[] = [
     `${title}`,

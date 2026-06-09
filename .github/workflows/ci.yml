@@ -1,0 +1,32 @@
+name: CI
+
+# Filet de sécurité : aucune PR ne doit casser test/build/e2e.
+# Le lint est informatif (continue-on-error) tant que la dette `any`
+# n'est pas résorbée par l'autopilot — il deviendra bloquant ensuite.
+# Aucune entrée non fiable (github.event.*) n'est interpolée ici.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Lint (informatif — dette en cours de résorption)
+        run: npm run lint
+        continue-on-error: true
+      - name: Tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+      - name: Navigateur Playwright
+        run: npx playwright install chromium --with-deps
+      - name: E2E smoke
+        run: npm run e2e
