@@ -72,3 +72,6 @@ npm run lint     # eslint
 - Toujours passer par React Query pour les appels API (pas de fetch direct dans les composants)
 - Types TypeScript stricts — pas de `any` sauf dans les données API existantes
 - Tailwind uniquement pour le style (pas de CSS inline)
+
+## 🤖 Autopilot & pilotage mobile
+Voir **docs/AUTOPILOT.md** (passage de relais). Règle d'or : jamais de commit/push sur `main` — toujours branche + PR ; le merge d'une PR = déploiement prod. Prochaine piste : vidéothèque membre `/video` (répliquer le pattern AEFV).
