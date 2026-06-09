@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { checkAuth, login as apiLogin, logout as apiLogout, getPermissions } from '@/lib/api';
+import { checkAuth, login as apiLogin, logout as apiLogout, getPermissions, Member } from '@/lib/api';
 import { touchActivity, isSessionExpired, clearActivity } from '@/lib/security';
 
 // Vérification session toutes les 5 minutes
 const SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 interface AuthContextType {
-  user: any | null;
+  user: Member | null;
   loading: boolean;
   permissions: Record<string, string[]>;
   hasPermission: (action: string) => boolean;
@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
   const sessionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
