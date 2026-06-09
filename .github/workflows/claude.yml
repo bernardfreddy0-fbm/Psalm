@@ -2,10 +2,9 @@ name: Claude (commande @claude)
 
 # Permet de piloter le projet depuis le téléphone : commenter "@claude ..."
 # sur une issue ou une PR (GitHub Mobile) lance Claude, qui agit puis ouvre/maj une PR.
-# Pré-requis : (1) installer l'app GitHub "Claude" sur le repo,
-#              (2) ajouter le secret ANTHROPIC_API_KEY.
-# L'action détecte elle-même la mention @claude (trigger_phrase par défaut) et
-# ne fait rien si elle est absente — pas besoin de garde `if` sur le corps du message.
+# AUTH via abonnement Claude Pro/Max (jeton OAuth), PAS via crédits API :
+#   - générer le jeton : `claude setup-token` (Claude Code CLI, compte Pro/Max)
+#   - l'ajouter en secret : CLAUDE_CODE_OAUTH_TOKEN
 on:
   issue_comment:
     types: [created]
@@ -31,4 +30,4 @@ jobs:
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
