@@ -57,7 +57,10 @@ Inventaire au 2026-06-10 (157 `any` dans 18 fichiers, du plus gros au plus petit
 ```
 Prochaine cible : `src/lib/api.ts` (64 erreurs).
 
-- [ ] **Step 2..N : UN fichier (ou groupe ≤ 20 erreurs) par passage**
+- [x] **Step 2 : `src/lib/api.ts` — lot 1 (21 any résolus, 43 restants)**
+Ajout interfaces `RawMember`, `RawSundayEntry`, `RawAssignment`, `RawSong`. Typage helpers isActiveMember/normalizeMember, apiFetch membres/planning/songs, params `Record<string,any>`→`Record<string,unknown>`. Lint/test/build/e2e verts. Commit 2026-06-10.
+
+- [ ] **Step 3..N : `src/lib/api.ts` — lots 2+ (43 any restants), puis autres fichiers**
 Typer correctement, vérifs vertes, commit `fix(types): <fichier> sans any (xx restants)`. Répéter à chaque passage du cron jusqu'à 0. Mettre à jour le compteur dans le titre du commit.
 
 ## Task 3 : Clôture
