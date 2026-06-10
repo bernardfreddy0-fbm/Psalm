@@ -15,12 +15,65 @@ function normalizeRoleCsv(roleValue?: string | null): string {
   return [...new Set(roleValue.split(',').map(r => normalizeRole(r.trim())).filter(Boolean))].join(',');
 }
 
-function isActiveMember(member: any): boolean {
+function isActiveMember(member: RawMember): boolean {
   return member?.is_active !== false && member?.first_name !== '[Supprimé]';
 }
 
-function normalizeMember(member: any) {
+function normalizeMember(member: RawMember) {
   return { ...member, role: normalizeRoleCsv(member?.role) };
+}
+
+// ── Raw API response types (formes brutes avant transformation) ───────────────
+
+interface RawMember {
+  id: string | number;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  phone?: string | null;
+  instrument?: string | null;
+  is_active?: boolean | string | null;
+  created_at?: string | null;
+}
+
+interface RawAssignment {
+  user_id: string;
+  pole: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  confirmed?: boolean | null;
+  profiles?: { first_name?: string; last_name?: string };
+}
+
+interface RawSundayEntry {
+  id: string | number;
+  date?: string;
+  label?: string | null;
+  is_jeunesse?: boolean | null;
+  dirigeant_id?: string | null;
+  dir_first?: string | null;
+  dir_last?: string | null;
+  dirigeant?: string | null;
+  note?: string | null;
+  is_locked?: boolean | null;
+  updated_at?: string | null;
+  assignments?: RawAssignment[];
+  sunday_assignments?: RawAssignment[];
+}
+
+interface RawSong {
+  id: string | number;
+  title?: string;
+  author?: string | null;
+  key_note?: string | null;
+  youtube_url?: string | null;
+  tempo?: string | null;
+  tags?: string | null;
+  partition_url?: string | null;
+  audio_url?: string | null;
+  folder?: string | null;
+  created_at?: string | null;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -33,13 +86,13 @@ export function clearToken() {
 }
 
 export async function login(email: string, password: string) {
-  const res = await apiFetch<{ access_token: string; refresh_token?: string; user?: any }>('/auth/login', {
+  const res = await apiFetch<{ access_token: string; refresh_token?: string; user?: RawMember }>('/auth/login', {
     method: 'POST',
     json: { email, password },
   });
   setTokens(res.access_token, res.refresh_token ?? '');
   // Récupérer le profil courant après login
-  const profile = await apiFetch<any>('/members/me');
+  const profile = await apiFetch<Member>('/members/me');
   return profile;
 }
 
@@ -47,7 +100,7 @@ export async function checkAuth() {
   try {
     const token = getToken();
     if (!token) return null;
-    const profile = await apiFetch<any>('/members/me');
+    const profile = await apiFetch<Member>('/members/me');
     return profile;
   } catch {
     return null;
@@ -61,15 +114,15 @@ export async function logout() {
 // ── Members ───────────────────────────────────────────────────────────────────
 
 export const getMembers = async () => {
-  const data = await apiFetch<any[]>('/members');
+  const data = await apiFetch<RawMember[]>('/members');
   return (data || []).filter(isActiveMember).map(normalizeMember);
 };
 
 // Version complète pour la gestion DSI (inclut created_at + tous les inactifs)
 export const getAllAccounts = async () => {
-  const data = await apiFetch<any[]>('/members');
+  const data = await apiFetch<RawMember[]>('/members');
   return (data || [])
-    .filter((m: any) => m.first_name !== '[Supprimé]')
+    .filter((m: RawMember) => m.first_name !== '[Supprimé]')
     .map(normalizeMember);
 };
 
@@ -92,8 +145,8 @@ export const createMember = async (data: { first_name: string; last_name: string
   return { id: res.id, password: res.password ?? passwordUsed };
 };
 
-export const updateMember = async (id: string, data: Record<string, any>) => {
-  const payload: any = { ...data };
+export const updateMember = async (id: string, data: Record<string, unknown>) => {
+  const payload: Record<string, unknown> = { ...data };
   if (data.is_active !== undefined) payload.is_active = data.is_active !== '0' && data.is_active !== false;
   await apiFetch(`/members/${id}`, { method: 'PUT', json: payload });
   return { success: true };
@@ -106,7 +159,7 @@ export const updateMemberEmail = async (userId: string, newEmail: string) => {
 
 // ── Journal d'audit sécurité ──────────────────────────────────────────────────
 
-export async function logSecurityEvent(event: string, meta?: Record<string, any>) {
+export async function logSecurityEvent(event: string, meta?: Record<string, unknown>) {
   try {
     const token = getToken();
     const actor = token ? 'admin' : 'system';
@@ -135,8 +188,8 @@ export const resetMemberPassword = async (userId: string, newPassword: string) =
 // ── Planning / Sundays ───────────────────────────────────────────────────────
 
 export const getPlanning = async (year: number) => {
-  const data = await apiFetch<any[]>(`/planning/${year}`);
-  return (data || []).map((s: any) => ({
+  const data = await apiFetch<RawSundayEntry[]>(`/planning/${year}`);
+  return (data || []).map((s: RawSundayEntry) => ({
     ...s,
     id: String(s.id),
     assignments: s.assignments || s.sunday_assignments || [],
@@ -144,14 +197,14 @@ export const getPlanning = async (year: number) => {
 };
 
 export const createSunday = async (date: string, label: string) => {
-  const data = await apiFetch<any>('/planning/sunday', {
+  const data = await apiFetch<RawSundayEntry>('/planning/sunday', {
     method: 'POST',
     json: { date, label },
   });
   return data;
 };
 
-export const updateSunday = async (id: string, data: Record<string, any>) => {
+export const updateSunday = async (id: string, data: Record<string, unknown>) => {
   await apiFetch(`/planning/sunday/${id}`, { method: 'PUT', json: data });
   return { success: true };
 };
@@ -179,8 +232,8 @@ export interface AdminSong {
 }
 
 export const getSongs = async (): Promise<AdminSong[]> => {
-  const data = await apiFetch<any[]>('/songs');
-  return (data || []).map((s: any) => ({
+  const data = await apiFetch<RawSong[]>('/songs');
+  return (data || []).map((s: RawSong) => ({
     ...s,
     id: String(s.id),
     key: s.key_note,
@@ -189,8 +242,8 @@ export const getSongs = async (): Promise<AdminSong[]> => {
 };
 
 export const getSongFolders = async (): Promise<string[]> => {
-  const data = await apiFetch<any[]>('/songs');
-  return [...new Set((data || []).map((s: any) => s.folder).filter(Boolean))];
+  const data = await apiFetch<RawSong[]>('/songs');
+  return [...new Set((data || []).map((s: RawSong) => s.folder).filter((f): f is string => Boolean(f)))];
 };
 
 export const createSong = async (data: { title: string; author?: string; key?: string; tempo?: string; tags?: string }) => {
@@ -206,8 +259,8 @@ export const createSong = async (data: { title: string; author?: string; key?: s
   });
 };
 
-export const updateSong = async (id: string, data: Record<string, any>) => {
-  const payload: any = { ...data };
+export const updateSong = async (id: string, data: Record<string, unknown>) => {
+  const payload: Record<string, unknown> = { ...data };
   if (data.key !== undefined) { payload.key_note = data.key; delete payload.key; }
   if (data.link !== undefined) { payload.youtube_url = data.link; delete payload.link; }
   await apiFetch(`/songs/${id}`, { method: 'PUT', json: payload });
